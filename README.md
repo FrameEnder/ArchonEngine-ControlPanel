@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.10.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.11.0.
 
 It shares its logic with the desktop manager: `kawari_core/` is the same
 database, Auracite, schema and version code, with the Qt dependency removed.
@@ -206,7 +206,7 @@ collections as progress bars, and other stats.
 **Dashboard** (administrators only) — server start/stop/restart, service and
 client-version checks, the full `config.yaml` editor, database health and
 migration, backups, account creation and admin promotion, Auracite import and
-export, branding, and container logs. Non-admins get a 403 on every dashboard
+export, branding, quest progress, and container logs. Non-admins get a 403 on every dashboard
 route, including the POST actions, not just a hidden nav link.
 
 **Branding** — server name, tagline, emoji favicon, logo, accent colour, light or
@@ -252,6 +252,33 @@ test.
   them, `Global.lua`, optionally the index, and a `MANIFEST.md` of the checks:
   the attachment for whoever writes the next quests. Dumps are Square Enix's
   files; keep them private and out of git.
+
+## Quest progress
+
+**Dashboard → Progress** tracks how much of the game's story the server can play:
+every quest from A Realm Reborn to Dawntrail, against the quest scripts in the
+**active build**.
+
+* **Where the quests come from.** The quest index (**Build the quest index**, here
+  or in Quest Lab), which `kawari-questdump index` makes from the server's own
+  game install. So the list is the game's own, up to whatever patch is installed
+  (7.57 today); build it again after a game update to pick up new quests. No game
+  text is kept in this repository.
+* **Main Scenario or side quest.** A quest is Main Scenario when it is in the
+  game's ScenarioTree sheet, the same list the Scenario Guide uses. Everything else
+  the journal lists is a side quest, filed under its journal section (Sidequests,
+  Class & Job Quests, Feature Quests...) - which the page can filter by. Quests the
+  journal never shows (unused or internal rows) aren't counted.
+* **Implemented / verified.** Implemented means the build has the quest's script
+  (`resources/scripts/events/quest/<id / 100>/<script>.lua`); verified means the
+  script's header says it was checked against a retail recording.
+* Totals per expansion for Main Scenario and side quests, then the full list,
+  filterable by expansion, type, journal section, status and a search by ID,
+  script or name. Each quest links to its Quest Lab page.
+
+The index needs a fork build whose `kawari-questdump` writes format 2 (main
+scenario flag, expansion and journal section). With an older index the page still
+works, but says so and counts every quest as a side quest.
 
 ## Diagnostics
 
@@ -493,10 +520,10 @@ is now the complete one.
 
 ```
 kawari_core/     shared, Qt-free: dbtools, chardata, auracite, schemagen,
-                 versions, upstream, questlab, gamedata,
+                 versions, upstream, questlab, progress, gamedata,
                  constants, core
 kawari_web/      Flask app: config, webdb, auth, podman_api, stats, app,
-                 dashboard, upstreamcfg, srcbuild, questlab,
+                 dashboard, upstreamcfg, srcbuild, questlab, progress,
                  templates/, static/
 Containerfile    rootless-friendly image, runs as a non-root user
 run.sh           build + run with the right mounts

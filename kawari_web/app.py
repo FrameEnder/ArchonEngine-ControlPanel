@@ -45,7 +45,7 @@ def create_app(settings: Settings | None = None) -> Flask:
 
     app.config["JOBS"] = JobRunner(app)
     # Importing these registers their routes on the shared blueprint.
-    from . import admin_base, dashboard as _core, admin_setup, admin_updates, admin_character, questlab, diagnostics  # noqa: F401
+    from . import admin_base, dashboard as _core, admin_setup, admin_updates, admin_character, questlab, progress, diagnostics  # noqa: F401
     from .social import social
     from .syncapi import api
     app.register_blueprint(main)

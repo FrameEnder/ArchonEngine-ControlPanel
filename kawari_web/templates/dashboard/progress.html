@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Progress · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+{% include "dashboard/_nav.html" %}
+
+{% macro meter(t, label) %}
+  <div class="meter">
+    <div class="meter-head"><span>{{ label }}</span>
+      <span class="mono">{{ t.implemented }} / {{ t.total }}{% if t.total %} · {{ '%.1f' | format(t.percent) }}%{% endif %}</span></div>
+    <span class="track"><span class="fill" style="width: {{ '%.2f' | format(t.percent) }}%"></span></span>
+    {% if t.verified %}<div class="dim small">{{ t.verified }} checked against a retail recording</div>{% endif %}
+  </div>
+{% endmacro %}
+
+{% if not data.rows %}
+<section class="card">
+  <h2>Quest progress</h2>
+  <p>Every quest from A Realm Reborn to Dawntrail, against the quest scripts your server has. The list
+     comes from your own game install: build the quest index once (and again after a game update).</p>
+  {% if tool.ok and tool.has_index_cmd %}
+  <form method="post" action="{{ url_for('dashboard.quests_run') }}" class="rowactions">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="command" value="index">
+    <button class="btn accent" {{ 'disabled' if busy }}>Build the quest index</button>
+  </form>
+  {% else %}
+  <p class="line err">{{ tool.reason or "This build's kawari-questdump predates the index command — build the fork again." }}</p>
+  {% endif %}
+</section>
+{% else %}
+
+<section class="card">
+  <h2>Quest progress</h2>
+  <p class="dim">Every quest the game's journal lists, from your game install's quest index (built
+     {{ index_time }}), against the quest scripts in the active build{% if build %} (<span class="mono">{{ build }}</span>){% endif %}.
+     <b>Implemented</b> means the build has the quest's script; <b>verified</b> means its header says it was
+     checked against a retail recording.</p>
+  {% if not data.has_journal_data %}
+  <p class="line err">This quest index was built before it recorded which quests are main scenario and where the
+     journal files them, so every quest shows as a side quest. Build the fork again, then build the quest index.</p>
+  {% endif %}
+  <div class="cols">
+    <div>{{ meter(total_msq, 'Main Scenario — all expansions') }}</div>
+    <div>{{ meter(total_side, 'Side quests — all expansions') }}</div>
+  </div>
+</section>
+
+<div class="cols progress-cards">
+  {% for ex in summary %}
+  <section class="card">
+    <h3><a href="{{ url_for('dashboard.progress', expansion=ex.id) }}">{{ ex.name }}</a></h3>
+    <a class="plain" href="{{ url_for('dashboard.progress', expansion=ex.id, type='msq') }}">{{ meter(ex.msq, 'Main Scenario') }}</a>
+    <a class="plain" href="{{ url_for('dashboard.progress', expansion=ex.id, type='side') }}">{{ meter(ex.side, 'Side quests') }}</a>
+  </section>
+  {% endfor %}
+</div>
+
+<section class="card">
+  <h2>Quests</h2>
+  <form method="get" action="{{ url_for('dashboard.progress') }}" class="cols fields progress-filters">
+    <label>Expansion
+      <select name="expansion">
+        <option value="">All</option>
+        {% for ex in summary %}<option value="{{ ex.id }}" {{ 'selected' if filters.expansion == ex.id }}>{{ ex.name }}</option>{% endfor %}
+      </select></label>
+    <label>Type
+      <select name="type">
+        <option value="">All</option>
+        {% for key, label in type_labels.items() %}<option value="{{ key }}" {{ 'selected' if filters.type == key }}>{{ label }}</option>{% endfor %}
+      </select></label>
+    <label>Journal section
+      <select name="section">
+        <option value="">All</option>
+        {% for s in data.sections() %}<option value="{{ s }}" {{ 'selected' if filters.section == s }}>{{ s }}</option>{% endfor %}
+      </select></label>
+    <label>Status
+      <select name="status">
+        <option value="">All</option>
+        {% for key, label in status_labels.items() %}<option value="{{ key }}" {{ 'selected' if filters.status == key }}>{{ label }}</option>{% endfor %}
+      </select></label>
+    <label>Search <input type="text" name="q" value="{{ filters.q }}" placeholder="ID, script or name" autocomplete="off"></label>
+    <div class="rowactions"><button class="btn">Filter</button>
+      <a class="btn" href="{{ url_for('dashboard.progress') }}">Clear</a></div>
+  </form>
+
+  <p class="dim small">{{ row_count }} quest(s){% if pages > 1 %} — page {{ page }} of {{ pages }}{% endif %}</p>
+  {% if rows %}
+  <div class="progress-table">
+  <table class="grid">
+    <tr><th>ID</th><th>Quest</th><th>Lv</th><th>Type</th><th class="wide-only">Journal</th><th>Status</th></tr>
+    {% for r in rows %}
+    <tr>
+      <td class="mono">{{ r.id }}</td>
+      <td><a href="{{ url_for('dashboard.quest', quest_id=r.id) }}">{{ r.name }}</a>
+          <div class="dim small mono">{{ r.script }}</div></td>
+      <td>{{ r.level }}</td>
+      <td class="small">{{ 'MSQ' if r.kind == 'msq' else 'Side' }}</td>
+      <td class="dim small wide-only">{{ r.genre or r.category or r.section }}{% if r.place %}<div>{{ r.place }}</div>{% endif %}</td>
+      <td><span class="qstatus {{ 'scripted' if r.status == 'verified' else ('unverified' if r.status == 'implemented' else '') }}">{{ status_labels[r.status] }}</span></td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+  {% if pages > 1 %}
+  <p class="rowactions">
+    {% if page > 1 %}<a class="btn" href="{{ url_for('dashboard.progress', page=page - 1, **filters) }}">Previous</a>{% endif %}
+    {% if page < pages %}<a class="btn" href="{{ url_for('dashboard.progress', page=page + 1, **filters) }}">Next</a>{% endif %}
+  </p>
+  {% endif %}
+  {% endif %}
+
+  {% if data.hidden or data.unknown_scripts %}
+  <p class="dim small">
+    {% if data.hidden %}{{ data.hidden }} quest rows the journal never shows (unused or internal) aren't counted.{% endif %}
+    {% if data.unknown_scripts %}The build has {{ data.unknown_scripts | length }} quest script(s) that match no quest here:
+      <span class="mono">{{ data.unknown_scripts | join(', ') }}</span>.{% endif %}
+  </p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}
