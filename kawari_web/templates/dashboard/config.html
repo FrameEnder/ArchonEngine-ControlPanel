@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Server config · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+{% include "dashboard/_nav.html" %}
+<section class="card">
+  <h2>config.yaml</h2>
+  <p class="dim mono">{{ path }}</p>
+  {% if error %}<p class="line err">{{ error }}</p>{% endif %}
+  <p class="dim">Only values that differ from Kawari's defaults are written. Changes
+     take effect when the container restarts.</p>
+</section>
+
+<form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+{% for sect, fields in schema.items() %}
+  <section class="card">
+    <h2>{{ sect }}</h2>
+    {% if help.get(sect) %}<p class="dim">{{ help[sect] }}</p>{% endif %}
+    {% for key, label, kind, default, tip in fields %}
+      {% set name = sect ~ '.' ~ key %}
+      <div class="field">
+        <label for="{{ name }}">{{ label }}</label>
+        {% if kind == 'bool' %}
+          <input type="checkbox" id="{{ name }}" name="{{ name }}" {{ 'checked' if values[name] }}>
+        {% elif kind in ('int', 'port') %}
+          <input type="number" id="{{ name }}" name="{{ name }}" value="{{ values[name] }}" min="0" max="65535">
+        {% else %}
+          <input type="text" id="{{ name }}" name="{{ name }}" value="{{ values[name] }}" placeholder="{{ default }}">
+        {% endif %}
+        <p class="hint">{{ tip }}</p>
+      </div>
+    {% endfor %}
+  </section>
+{% endfor %}
+  <p><button class="btn accent" type="submit">Save config.yaml</button></p>
+</form>
+{% endblock %}

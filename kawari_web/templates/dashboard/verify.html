@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Verify · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+{% include "dashboard/_nav.html" %}
+<section class="card">
+  <h2>What clients will receive</h2>
+  <p class="dim">Fetched from <code class="mono">{{ url }}/.well-known/xiv</code>, exactly
+     as Astra does.</p>
+  {% for level, message in results %}<p class="line {{ level }}">{{ message }}</p>{% endfor %}
+  <p><a class="btn" href="{{ url_for('dashboard.setup') }}">Back to Setup</a></p>
+</section>
+{% endblock %}

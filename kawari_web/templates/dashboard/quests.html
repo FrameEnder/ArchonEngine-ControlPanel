@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Quests · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+{% include "dashboard/_nav.html" %}
+
+<div class="cols">
+  <section class="card">
+    <h2>Quest Lab</h2>
+    <p class="dim">Dump quests from the game with <span class="mono">kawari-questdump</span>, check the
+       fork's scripts against what the client does, and put a test character anywhere in a quest.</p>
+    {% if status.ok %}
+      <p class="line ok">kawari-questdump is in the active build ({{ status.build }}).</p>
+    {% else %}
+      <p class="line err">{{ status.reason }}</p>
+    {% endif %}
+    <dl class="kv">
+      <dt>Dumped</dt><dd>{{ rows | length }} quest(s)</dd>
+      <dt>Quest index</dt><dd>{% if index_count %}{{ index_count }} quests, built {{ index_time }}
+        {% else %}<span class="dim">not built yet — search and prerequisites only cover dumped quests</span>{% endif %}</dd>
+      {% if rows %}
+      <dt>Scripts</dt><dd>
+        {% for key, label in labels.items() %}{% if counts[key] %}
+          <span class="qstatus {{ key }}">{{ counts[key] }} {{ label }}</span>
+        {% endif %}{% endfor %}</dd>
+      {% endif %}
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>Find a quest</h2>
+    <form method="get" action="{{ url_for('dashboard.quests') }}">
+      <label>ID, script or name <input type="text" name="q" value="{{ query }}"
+        placeholder="3854, XxaFst034_03854, Surveying the Damage" autocomplete="off"></label>
+      <button class="btn">Search</button>
+    </form>
+    {% if query %}
+      {% if results %}
+      <table class="grid">
+        <tr><th>ID</th><th>Quest</th><th>Lv</th><th>Area</th><th></th></tr>
+        {% for r in results %}
+        <tr>
+          <td class="mono">{{ r.id }}</td>
+          <td><a href="{{ url_for('dashboard.quest', quest_id=r.id) }}">{{ r.name or r.script }}</a>
+              <div class="dim small mono">{{ r.script }}</div></td>
+          <td>{{ r.level }}</td>
+          <td class="dim small">{{ r.place_name or '' }}</td>
+          <td class="small">{{ 'dumped' if r.id in dumped_ids else '' }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}<p class="dim">Nothing matches “{{ query }}”{% if not index_count %} among the dumped
+        quests. Build the quest index to search every quest{% endif %}.</p>{% endif %}
+    {% endif %}
+  </section>
+</div>
+
+<section class="card">
+  <h2>Run kawari-questdump</h2>
+  <p class="dim">Runs in a throwaway container made from the active server image, against the
+     server's game install. The server does not need to be running. Output goes to
+     <span class="mono">quest-dumps/</span> in the data folder; dumping a quest again replaces it.</p>
+  <div class="cols">
+    <form method="post" action="{{ url_for('dashboard.quests_run') }}" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="command" value="chain">
+      <h3>A story chain</h3>
+      <label>Starting after <input type="text" name="start" placeholder="124 or Close to Home"></label>
+      <label>How many <input type="number" name="count" value="20" min="1" max="200"></label>
+      <p class="hint">The quests that follow it in the same journal genre — the main story, for a story quest.</p>
+      <label class="inline"><input type="checkbox" name="listing"> Full instruction listings</label>
+      <label class="inline"><input type="checkbox" name="index" {{ 'checked' if not index_count and status.has_index_cmd }}
+        {{ 'disabled' if not status.has_index_cmd }}> Refresh the quest index</label>
+      <button class="btn accent" {{ 'disabled' if busy or not status.ok }}>Dump chain</button>
+    </form>
+
+    <form method="post" action="{{ url_for('dashboard.quests_run') }}" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="command" value="dump">
+      <h3>Specific quests</h3>
+      <label>One per line <textarea name="quests" rows="4"
+        placeholder="3854&#10;XxaFst031_03855&#10;Surveying the Damage"></textarea></label>
+      <label class="inline"><input type="checkbox" name="listing"> Full instruction listings</label>
+      <label class="inline"><input type="checkbox" name="index" {{ 'disabled' if not status.has_index_cmd }}> Refresh the quest index</label>
+      <button class="btn accent" {{ 'disabled' if busy or not status.ok }}>Dump</button>
+    </form>
+
+    <form method="post" action="{{ url_for('dashboard.quests_run') }}" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="command" value="extract">
+      <h3>Any game file</h3>
+      <label>Game paths, one per line <textarea name="paths" rows="4"
+        placeholder="game_script/opening/OpeningGridania.luab"></textarea></label>
+      <label class="inline"><input type="checkbox" name="listing"> Full instruction listings</label>
+      <button class="btn" {{ 'disabled' if busy or not status.ok }}>Extract</button>
+      {% if extracted %}
+        <p class="dim small">Extracted:
+          {% for f in extracted %}<a class="mono" href="{{ url_for('dashboard.quest_extracted', name=f.name) }}">{{ f.name }}</a>{{ ', ' if not loop.last }}{% endfor %}</p>
+      {% endif %}
+    </form>
+  </div>
+  <hr class="sep">
+  <form method="post" action="{{ url_for('dashboard.quests_run') }}" class="rowactions">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="command" value="index">
+    <button class="btn" {{ 'disabled' if busy or not status.ok or not status.has_index_cmd }}>Build the quest index</button>
+    <span class="dim small">{% if status.ok and not status.has_index_cmd %}This build's kawari-questdump predates
+      the index command — build the fork again.{% else %}Every quest's name, level, prerequisites and area:
+      search all quests, and complete a quest's prerequisites on a test character.{% endif %}</span>
+  </form>
+</section>
+
+{% if rows %}
+<section class="card">
+  <h2>Dumped quests</h2>
+  <p class="dim">Each script is read from the active build — what the server runs right now — and
+     checked against its dump: <b>needs a look</b> means it names a quest variable the Quest sheet
+     doesn't have, or plays a scene the client script doesn't contain.</p>
+  <form method="post" action="{{ url_for('dashboard.quests_bundle') }}" id="dumps">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <table class="grid">
+      <tr><th><input type="checkbox" data-check-all="script" aria-label="Select all"></th>
+          <th>ID</th><th>Quest</th><th>Lv</th><th>Script</th><th>Client scenes played</th></tr>
+      {% for d, a in rows %}
+      <tr>
+        <td><input type="checkbox" name="script" value="{{ d.script }}" aria-label="Select {{ d.name }}"></td>
+        <td class="mono">{{ d.quest_id }}</td>
+        <td><a href="{{ url_for('dashboard.quest', quest_id=d.quest_id) }}">{{ d.name }}</a>
+            <div class="dim small mono">{{ d.script }}{% if d.quest.place %} · {{ d.quest.place }}{% endif %}</div></td>
+        <td>{{ d.level }}</td>
+        <td><span class="qstatus {{ a.status }}">{{ labels[a.status] }}</span>
+            {% if a.unknown_names %}<div class="small err-text mono">{{ a.unknown_names | join(', ') }}</div>{% endif %}</td>
+        <td class="small">{% if a.client_scenes %}
+            {% if a.scripted %}{{ a.client_scenes | length - a.unplayed | length }} / {% endif %}{{ a.client_scenes | length }}
+            {% else %}<span class="dim">no listing</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    <div class="rowactions">
+      <button class="btn accent">Download bundle</button>
+      <label class="inline small"><input type="checkbox" name="with_index"> include the quest index</label>
+      <button class="btn danger" formaction="{{ url_for('dashboard.quests_delete') }}"
+        onclick="return confirm('Delete the selected dumps (all of them, if none are selected)?')">Delete dumps</button>
+    </div>
+    <p class="hint">The bundle holds the selected dumps (all, if none are selected), the scripts the
+       server runs for them today, Global.lua and a MANIFEST.md summarising the checks above —
+       one attachment for whoever writes the next quests. The dumps are Square Enix's files: keep
+       them private and out of git.</p>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

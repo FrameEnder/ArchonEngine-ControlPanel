@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Settings · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+<div class="settings">
+  <nav class="settings-nav">
+    {% for key, label, description in pages %}
+    <a href="{{ url_for('social.settings_page', page=key) }}" class="{{ 'on' if page == key }}">
+      <b>{{ label }}</b><span class="dim small">{{ description }}</span>
+    </a>
+    {% endfor %}
+  </nav>
+
+  <div class="settings-body">
+  {% if page == 'profile' %}
+    <section class="card">
+      <h2>Profile</h2>
+      <p class="dim">How you appear to other players.</p>
+      <form method="post" action="{{ url_for('main.edit_profile') }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <label>Display name <input name="display_name" value="{{ user.display_name }}" maxlength="60"></label>
+        <label>Bio <textarea name="bio" rows="5" maxlength="2000">{{ user.bio }}</textarea></label>
+        <label>Profile picture <input type="file" name="avatar" accept="image/*"></label>
+        <label>Banner art <input type="file" name="banner" accept="image/*"></label>
+        <button class="btn accent">Save profile</button>
+      </form>
+    </section>
+
+  {% elif page == 'security' %}
+    <section class="card">
+      <h2>Password</h2>
+      <p class="dim">There is only one account: this changes the password for this site
+         <b>and</b> for the game launcher.</p>
+      <form method="post" action="{{ url_for('social.change_password') }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <label>Current password <input type="password" name="current_password" required></label>
+        <label>New password <input type="password" name="new_password" required></label>
+        <label>Confirm new password <input type="password" name="confirm_password" required></label>
+        <button class="btn accent">Change password</button>
+      </form>
+      <p class="warn-inline">The game server stores passwords in plain text and compares
+         them literally - that is how Kawari works, and this site cannot be more secure
+         than the server it front-ends. Use a password you do not use anywhere else.</p>
+    </section>
+    <section class="card">
+      <h2>Account</h2>
+      <dl class="kv">
+        <dt>Username</dt><dd>{{ user.username }}</dd>
+        <dt>Account id</dt><dd class="mono">{{ user.user_id }}</dd>
+        <dt>Role</dt><dd>{{ 'Administrator' if user.is_admin else 'Player' }}</dd>
+        <dt>Joined</dt><dd>{{ user.created_at }}</dd>
+      </dl>
+    </section>
+
+  {% elif page == 'notifications' %}
+    <section class="card">
+      <h2>Notifications</h2>
+      <p class="dim">Turning one off stops it being delivered at all - you will not see
+         it later.</p>
+      <form method="post" action="{{ url_for('social.save_notification_prefs') }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        {% for kind, label in kinds %}
+        <label class="inline"><input type="checkbox" name="kinds" value="{{ kind }}"
+          {{ 'checked' if prefs[kind] }}> {{ label }}</label>
+        {% endfor %}
+        <p><button class="btn accent">Save notification settings</button></p>
+      </form>
+    </section>
+
+  {% elif page == 'sync' %}
+    <section class="card">
+      <h2>Character sync</h2>
+      <p class="dim">The Kawari Companion plugin sends your character to this server
+         on a schedule, so your profile stays current without exporting by hand.</p>
+
+      {% if token %}
+        <label>Server URL <input value="{{ base_url }}" readonly onclick="this.select()"></label>
+        <label>Token <input value="{{ token }}" readonly onclick="this.select()"></label>
+        <p class="warn-inline">Anyone holding this token can update the characters on
+           this account. Paste it into the plugin and nowhere else; issue a new one if
+           it leaks.</p>
+        <div class="btnrow">
+          <form method="post" class="inline" action="{{ url_for('api.new_token') }}"
+                onsubmit="return confirm('Issue a new token? The current one stops working at once.')">
+            <input type="hidden" name="csrf" value="{{ csrf_token }}">
+            <button class="btn">Issue a new token</button>
+          </form>
+          <form method="post" class="inline" action="{{ url_for('api.drop_token') }}"
+                onsubmit="return confirm('Revoke the token? Syncing stops until you issue another.')">
+            <input type="hidden" name="csrf" value="{{ csrf_token }}">
+            <button class="btn danger">Revoke</button>
+          </form>
+        </div>
+      {% else %}
+        <p>No token yet. Issue one, then paste it into the plugin along with the
+           server URL.</p>
+        <form method="post" action="{{ url_for('api.new_token') }}">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}">
+          <button class="btn accent">Issue a sync token</button>
+        </form>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2>What a sync may change</h2>
+      <form method="post" action="{{ url_for('api.save_sections') }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        {% for section in all_sections if section.key in allowed %}
+          <label class="inline"><input type="checkbox" name="sections" value="{{ section.key }}"
+            {{ 'checked' if section.key in sections }}> {{ section.label }}</label>
+        {% endfor %}
+        <p class="hint">Your character is never renamed by a sync, and a sync never
+           creates a character — if the name does not match one on this account it is
+           refused. A snapshot is taken before every sync, so it is undoable from the
+           dashboard. At most one sync every {{ min_interval }} seconds.</p>
+        <button class="btn accent">Save</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Last sync</h2>
+      {% if last %}
+        <p class="line {{ 'ok' if last.ok else 'err' }}">
+          {{ last.at }} —
+          {% if last.ok %}updated {{ last.character }}: {{ last.columns }} column(s)
+            across {{ last.tables | join(', ') }}
+          {% else %}failed: {{ last.error }}{% endif %}
+        </p>
+        {% if last.notes %}<ul class="dim small">{% for note in last.notes %}<li>{{ note }}</li>{% endfor %}</ul>{% endif %}
+      {% else %}
+        <p class="dim">Nothing has synced yet.</p>
+      {% endif %}
+    </section>
+
+  {% elif page == 'characters' %}
+    <section class="card">
+      <h2>Character visibility</h2>
+      <p class="dim">Characters are hidden from other players by default. Publishing one
+         shows it, and its stats, on your profile.</p>
+      <table class="grid">
+        <tr><th>Character</th><th>Visible to others</th><th></th></tr>
+        {% for c in characters %}
+        <tr>
+          <td>{{ c.name }}</td>
+          <td>{{ 'Yes' if c.is_public else 'No' }}</td>
+          <td>
+            <form method="post" action="{{ url_for('main.character_visibility', content_id=c.content_id) }}">
+              <input type="hidden" name="csrf" value="{{ csrf_token }}">
+              <input type="hidden" name="public" value="{{ '0' if c.is_public else '1' }}">
+              <button class="btn small">{{ 'Hide' if c.is_public else 'Publish' }}</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}<tr><td colspan="3" class="dim">No characters on this account yet.</td></tr>{% endfor %}
+      </table>
+    </section>
+  {% endif %}
+  </div>
+</div>
+{% endblock %}

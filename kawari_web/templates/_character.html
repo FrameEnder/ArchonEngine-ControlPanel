@@ -1,0 +1,115 @@
+{# One character as a compact tile board inside its own bordered container. #}
+{% macro character_board(ch, d, own) %}
+{% set s = d.summary %}
+<section class="character-board">
+
+  <header class="cb-head">
+    <span class="crest">{{ ch.name[:1]|upper }}</span>
+    <span class="who">
+      <span class="name">{{ ch.name }}</span>
+      <span class="dim small">
+        {% if s.title %}{{ s.title }}{% endif %}
+        {% if s.grand_company and s.grand_company != 'None' %} · {{ s.grand_company }}{% if s.gc_rank %}, {{ s.gc_rank }}{% endif %}{% endif %}
+      </span>
+    </span>
+
+    <span class="cb-figures">
+      <span class="fig"><b class="accent">{{ s.current_level or '—' }}</b><span class="dim small">{{ s.current_class }}</span></span>
+      <span class="fig"><b>{{ s.levelled }}<span class="of">/{{ s.slot_count }}</span></b><span class="dim small">levelled · top {{ s.highest }}</span></span>
+      <span class="fig"><b>{{ '{:,}'.format(s.gil) }}</b><span class="dim small">gil</span></span>
+    </span>
+
+    {% if own %}
+    <form method="post" action="{{ url_for('main.character_visibility', content_id=ch.content_id) }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="public" value="{{ '0' if ch.is_public else '1' }}">
+      <button class="eye {{ 'on' if ch.is_public else '' }}" type="submit">
+        {{ 'visible' if ch.is_public else 'hidden' }}</button>
+    </form>
+    {% endif %}
+  </header>
+
+  <div class="cb-grid">
+
+    <div class="tile span-2">
+      <h4>Classes and jobs <span class="dim small">hover a tile for EXP</span></h4>
+      <div class="jobgrid">
+        {% for row in d.levels %}
+          <span class="job tier-{{ 3 if row.level >= 70 else (2 if row.level >= 40 else (1 if row.level > 0 else 0)) }}"
+                title="{{ row.label }}&#10;{% if row.level %}Level {{ row.level }} · EXP {{ '{:,}'.format(row.exp) }} / {{ '{:,}'.format(row.to_next) if row.to_next else 'max' }}{% else %}Not unlocked{% endif %}{% for j in row.jobs %}&#10;{{ j.name }}{{ '' if j.owned else ' — no soul crystal' }}{% endfor %}">
+            <span class="abbr">{{ row.abbr }}</span>
+            <span class="lvl">{{ row.level or '—' }}</span>
+          </span>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# Every unlock category, one panel at a time. Without JavaScript all
+       panels stay visible, so nothing is ever hidden from a reader. #}
+    <div class="tile span-2 scrubber" data-scrub>
+      <h4>
+        <span>Unlocks <span class="dim small" data-scrub-label></span></span>
+        <span class="scrub-nav">
+          <button type="button" class="scrub" data-scrub-prev aria-label="Previous category">&lsaquo;</button>
+          <span class="dim small" data-scrub-count></span>
+          <button type="button" class="scrub" data-scrub-next aria-label="Next category">&rsaquo;</button>
+        </span>
+      </h4>
+      {% for group, rows in d.groups.items() %}
+        <div class="scrub-panel" data-scrub-panel data-title="{{ group }}">
+          <div class="two-col">
+            {% for row in rows %}{{ meter(row) }}{% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="tile">
+      <h4>Travel</h4>
+      <dl class="mini">
+        {% for row in d.groups.get('Travel', []) %}
+          <dt>{{ row.label.split('(')[0]|trim }}</dt>
+          <dd>{{ '{:,}'.format(row.set) }}/{{ '{:,}'.format(row.total) }}</dd>
+        {% endfor %}
+      </dl>
+    </div>
+
+    <div class="tile">
+      <h4>Duties</h4>
+      <dl class="mini">
+        {% for row in d.groups.get('Duties', [])[:6] %}
+          <dt>{{ row.label.replace(' unlocked', '') }}</dt>
+          <dd>{{ '{:,}'.format(row.set) }}/{{ '{:,}'.format(row.total) }}</dd>
+        {% endfor %}
+      </dl>
+    </div>
+
+    <div class="tile">
+      <h4>Purse</h4>
+      <dl class="mini">
+        <dt>Gil</dt><dd>{{ '{:,}'.format(s.gil) }}</dd>
+        <dt>MGP</dt><dd>{{ '{:,}'.format(s.mgp) }}</dd>
+      </dl>
+    </div>
+
+    <div class="tile">
+      <h4>Whereabouts</h4>
+      <dl class="mini">
+        <dt>Last seen</dt><dd class="plain">{{ s.zone }}</dd>
+        <dt>Home point</dt><dd class="plain">{{ s.home_point or '—' }}</dd>
+        <dt>Played</dt><dd>{{ s.played }}</dd>
+      </dl>
+    </div>
+  </div>
+</section>
+{% endmacro %}
+
+{% macro meter(row) %}
+<div class="meter">
+  <span class="meter-head">
+    <span>{{ row.label.split('(')[0]|trim }}</span>
+    <span class="dim">{{ '{:,}'.format(row.set) }} / {{ '{:,}'.format(row.total) }}</span>
+  </span>
+  <span class="track"><span class="fill" style="width: {{ row.percent }}%"></span></span>
+</div>
+{% endmacro %}

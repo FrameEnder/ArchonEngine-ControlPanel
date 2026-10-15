@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+{% block title %}Updates · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+{% include "dashboard/_nav.html" %}
+
+<div class="cols">
+  <section class="card">
+    <h2>Installed</h2>
+    {% if active %}
+    <dl class="kv">
+      <dt>Build</dt><dd class="mono">{{ active.short }}</dd>
+      <dt>Supports</dt><dd>{{ active.patch_text }}</dd>
+      <dt>Installed</dt><dd>{{ active.installed_at }} via {{ active.source }}</dd>
+      <dt>Schema map</dt><dd>{{ schema_label }}</dd>
+      {% if active.commit_message %}<dt>Commit</dt><dd class="dim">{{ active.commit_message }}</dd>{% endif %}
+    </dl>
+    {% else %}<p class="dim">No build installed. Use the Setup page.</p>{% endif %}
+    <form method="post" action="{{ url_for('dashboard.check_updates') }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <button class="btn accent" {{ 'disabled' if busy }}>Check for updates</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Upstream</h2>
+    <p class="dim small">Tracking <a href="{{ src.repo_url }}" rel="noopener">{{ src.label }}</a>
+       on {{ src.forge_label }}{% if not src.is_upstream_repo %} — not upstream{% endif %}.
+       <a href="#source">Change</a></p>
+    {% if src.is_old_upstream %}
+      <form method="post" action="{{ url_for('dashboard.move_to_codeberg') }}" class="line warn">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        Upstream Kawari moved to <b>Codeberg</b>; this still tracks its old GitHub repository,
+        which no longer receives commits.
+        <button class="btn small accent">Track codeberg.org/redstrate/Kawari</button>
+      </form>
+    {% endif %}
+    {% if last %}
+      <p class="dim">Checked {{ last.checked }}{% if last.source and last.source != src.label %}
+         against {{ last.source }}{% endif %}</p>
+      {% if last.error %}
+        <p class="line warn">{{ last.error }}</p>
+        <p class="dim small">The build's own details were still refreshed - those come
+           from raw.githubusercontent.com, which is not rate limited.</p>
+      {% elif last.up_to_date %}
+        <p class="line ok">On the latest commit ({{ last.head.sha[:9] }}).</p>
+      {% else %}
+        <p class="line warn">{{ last.behind }} commit(s) behind
+           {{ last.head.sha[:9] }} — supports {{ last.support.label }} ({{ last.support.game }}).</p>
+        {% if active and last.support.game and last.support.game != active.game_version %}
+          <p class="line err">The supported game version changes:
+             {{ active.game_version }} → {{ last.support.game }}. Keep Kawari and the
+             client in step through Astra.</p>
+        {% endif %}
+      {% endif %}
+      {% if last.unrelated %}<p class="line warn">{{ last.unrelated }}</p>{% endif %}
+      {% if last.schema_changes %}
+        <h4>Database schema changes in this update</h4>
+        <pre class="logs small">{{ last.schema_changes | join('\n') }}</pre>
+      {% else %}
+        <p class="dim small">No database schema changes in this update.</p>
+      {% endif %}
+    {% else %}<p class="dim">Not checked yet.</p>{% endif %}
+  </section>
+</div>
+
+{% if src.compiles or (last and not last.up_to_date) %}
+<section class="card">
+  <h2>{{ 'Build from source' if src.compiles else 'Update' }}</h2>
+  {% if src.compiles %}
+    <p class="dim">Compiles
+      {% if src.build_mode == 'local' %}<span class="mono">{{ src.local_path or '(no folder set)' }}</span>
+      on this server, uncommitted changes included,{% else %}<a href="{{ src.repo_url }}" rel="noopener">{{ src.slug }}</a>
+      @ {{ src.branch }} as pushed,{% endif %}
+      then installs it the same way an update does. This is always available, because
+      only the build itself knows whether anything changed: if it compiles to the
+      build that is already active, nothing is installed.</p>
+    <p class="hint">The first build pulls the Rust image and every crate and compiles the
+       whole workspace — expect tens of minutes. After that the cache is reused and
+       {{ 'an edit recompiles in a few minutes' if src.fast_build == '1'
+          else 'a rebuild is still slow: the full release profile has no incremental mode' }}.</p>
+  {% endif %}
+  <form method="post" action="{{ url_for('dashboard.apply_update') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label class="inline"><input type="checkbox" name="snapshot" checked> Snapshot every character first</label>
+    <label class="inline"><input type="checkbox" name="migrate"> Migrate the databases automatically</label>
+    <label class="inline"><input type="checkbox" name="restart" checked> Recreate and start the container afterwards</label>
+    <p class="hint">Auto-migrate is off by default so you can review the SQL on the
+       Database page first.</p>
+    <button class="btn accent" {{ 'disabled' if busy }}>{{ 'Build and install' if src.compiles else 'Update to latest' }}</button>
+  </form>
+</section>
+{% endif %}
+
+{% if last and last.commits %}
+<details class="card"><summary><b>Changelog ({{ last.commits | length }} commits)</b></summary>
+  <table class="grid">
+    <tr><th>Date</th><th>Commit</th><th>Change</th></tr>
+    {% for c in last.commits %}
+    <tr><td class="dim">{{ c.date }}</td>
+        <td class="mono dim"><a href="{{ src.commit_url(c.sha) }}" rel="noopener">{{ c.sha[:9] }}</a></td>
+        <td>{{ c.message }}</td></tr>
+    {% endfor %}
+  </table>
+</details>
+{% endif %}
+
+<section class="card" id="commits">
+  <h2>Install a specific commit</h2>
+  {% if picker_refusal %}
+    <p class="line warn">{{ picker_refusal }}</p>
+  {% else %}
+  <p class="dim">Install any commit of <a href="{{ src.repo_url }}" rel="noopener">{{ src.label }}</a>
+     instead of the newest — to bisect a regression, or to pin to a known-good build.
+     It goes through the same steps as an update (backup, character snapshot, schema,
+     image), and the Version history below can switch back. A commit that is already
+     installed is quicker to reach from there.</p>
+  <form method="post" action="{{ url_for('dashboard.apply_update') }}" class="rowactions">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="snapshot" value="on">
+    <input type="hidden" name="restart" value="on">
+    <input type="text" name="ref" placeholder="commit, tag or branch — e.g. b60cd9b5" required
+           autocapitalize="off" spellcheck="false" style="max-width: 22rem">
+    <button class="btn accent" {{ 'disabled' if busy }}>Install</button>
+    <span class="dim small">snapshots characters and recreates the container; databases are not auto-migrated</span>
+  </form>
+  {% if last and last.recent %}
+    <table class="grid">
+      <tr><th>Date</th><th>Commit</th><th>Change</th><th></th></tr>
+      {% for c in last.recent %}
+      {% set installed = store.ledger.get(c.sha) %}
+      <tr>
+        <td class="dim small">{{ c.date }}</td>
+        <td class="mono small"><a href="{{ src.commit_url(c.sha) }}" rel="noopener">{{ c.sha[:9] }}</a>
+          {% if loop.first %}<span class="dim">head</span>{% endif %}</td>
+        <td>{{ c.message }}<div class="dim small">{{ c.author }}</div></td>
+        <td>
+          {% if installed and installed.sha == store.ledger.active %}<span class="qstatus scripted">active</span>
+          {% elif installed and store.has_files(installed.sha) %}<span class="dim small">installed — switch below</span>
+          {% else %}
+          <form method="post" action="{{ url_for('dashboard.apply_update') }}">
+            <input type="hidden" name="csrf" value="{{ csrf_token }}">
+            <input type="hidden" name="ref" value="{{ c.sha }}">
+            <input type="hidden" name="snapshot" value="on">
+            <input type="hidden" name="restart" value="on">
+            <button class="btn small" {{ 'disabled' if busy }}
+              onclick="return confirm('Install {{ c.sha[:9] }}? The server restarts on it.')">Install</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p class="hint">“Check for updates” lists the newest 30 commits here.</p>
+  {% endif %}
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Version history</h2>
+  <p class="dim">Upstream only publishes the latest build, so this local history is the
+     only one that exists. A build whose image tag still exists switches with a retag —
+     no download, no rebuild. Deleting one frees its files but means you cannot roll
+     back to it without downloading it again; the active build cannot be deleted, and
+     pinned builds are skipped by pruning.</p>
+  <table class="grid">
+    <tr><th></th><th>Build</th><th>Supports</th><th>Installed</th><th>From</th><th>Image</th><th>Leave backup</th><th></th></tr>
+    {% for b in store.ledger.builds %}
+    <tr>
+      <td>{{ '▶' if b.sha == store.ledger.active else ('📌' if b.pinned else '') }}</td>
+      <td class="mono">{{ b.short }}{% if b.is_dev %} <span class="tag-dev" title="{{ b.notes }}">dev</span>{% endif %}</td>
+      <td>{{ b.patch_text }}</td>
+      <td class="dim">{{ b.installed_at }}</td>
+      <td class="dim small">{{ b.source or '-' }}</td>
+      <td class="dim">{{ 'tagged' if b.short in tags else ('files only' if store.has_files(b.sha) else 'missing') }}</td>
+      <td class="dim mono small">{{ b.leave_backup or '-' }}</td>
+      <td>
+        {% if b.sha != store.ledger.active and store.has_files(b.sha) %}
+        <form method="post" action="{{ url_for('dashboard.switch_build', sha=b.sha) }}"
+              onsubmit="return confirm('Switch to {{ b.short }}?')">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}">
+          <label class="inline small"><input type="checkbox" name="restore_db"
+            {{ 'checked' if b.leave_backup }}> restore its databases</label>
+          <button class="btn small" {{ 'disabled' if busy }}>Switch</button>
+        </form>
+        {% endif %}
+        <form method="post" class="inline" action="{{ url_for('dashboard.pin_build', sha=b.sha) }}">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}">
+          <button class="btn small">{{ 'Unpin' if b.pinned else 'Pin' }}</button>
+        </form>
+        {% if b.sha != store.ledger.active %}
+        <form method="post" class="inline" action="{{ url_for('dashboard.delete_build', sha=b.sha) }}"
+              onsubmit="return confirm('Delete the stored files for {{ b.short }}? You will not be able to roll back to it without downloading it again.')">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}">
+          <button class="btn small danger">Delete</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</section>
+
+<section class="card" id="source">
+  <h2>Source</h2>
+  <p class="dim">Which repository this installation tracks — the changelog, the
+     database schema (derived from that repository's migrations at the exact
+     commit), and the build archive itself. Point it at a fork to run your own
+     branch. Builds already installed are versioned by commit and keep working
+     whatever this says.</p>
+
+  {% if src.is_upstream_repo %}
+    <p class="line ok">Tracking upstream: <a href="{{ src.repo_url }}" rel="noopener">{{ src.label }}</a>
+       on {{ src.forge_label }} — {{ mode_labels[src.build_mode] }}.</p>
+  {% else %}
+    <p class="line warn">Tracking <a href="{{ src.repo_url }}" rel="noopener">{{ src.label }}</a>
+       on {{ src.forge_label }} — {{ mode_labels[src.build_mode] }}.</p>
+  {% endif %}
+  {% if src.downloads_upstream_for_fork %}
+    <p class="line err">This fork is still set to download upstream's archive from
+       xiv.zone, so updating installs <b>redstrate/Kawari's</b> code, not yours.
+       Choose a “Build from source” option below.</p>
+  {% endif %}
+
+  {% if probed %}
+    <h4>Last test — {{ probed.checked }} ({{ probed.label }})</h4>
+    <ul class="checks">
+      {% for c in probed.checks %}
+      <li class="line {{ 'ok' if c.ok else 'err' }}"><b>{{ c.name }}:</b> {{ c.detail }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('dashboard.save_source') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label>Repository URL <input name="repo_url" value="{{ src.repo_url }}"
+      placeholder="{{ default_src.repo_url }}" autocapitalize="off" spellcheck="false"></label>
+    <p class="hint">Paste the repository's web address from any forge:
+       <span class="mono small">https://codeberg.org/redstrate/Kawari</span>,
+       <span class="mono small">https://github.com/FrameEnder/Kawari</span>, or a self-hosted
+       Gitea or Forgejo such as <span class="mono small">http://100.79.235.78:3769/ProtoPropski/Kawari</span>.
+       A branch in the URL (…/src/branch/wip, …/tree/wip) is picked up too.</p>
+    <div class="cols fields">
+      <label>Forge
+        <select name="forge">
+          <option value="auto">Detect from the address</option>
+          {% for f, label in forge_labels.items() %}
+          <option value="{{ f }}" {{ 'selected' if src.forge == f }}>{{ label }}</option>
+          {% endfor %}
+        </select></label>
+      <label>Branch <input name="branch" value="{{ src.branch }}"
+        placeholder="{{ default_src.branch }}" autocapitalize="off" spellcheck="false"></label>
+    </div>
+    <p class="hint">“Detect” treats github.com as GitHub and anything else as Gitea/Forgejo —
+       which Codeberg is, and almost every self-hosted forge is.</p>
+
+    <label>Where the build comes from
+      <select name="build_mode">
+        {% for mode in build_modes %}
+        <option value="{{ mode }}" {{ 'selected' if src.build_mode == mode }}>{{ mode_labels[mode] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <details>
+      <summary class="dim small">What these mean</summary>
+      <p class="hint">{% for mode in build_modes %}<b>{{ mode_labels[mode] }}</b> — {{ mode_help[mode] }}<br>{% endfor %}</p>
+    </details>
+
+    <fieldset class="group">
+      <legend>Build from source</legend>
+      <label>Folder on this server (for “{{ mode_labels['local'] }}”)
+        <input name="local_path" value="{{ src.local_path }}"
+          placeholder="/home/you/src/Kawari" autocapitalize="off" spellcheck="false"></label>
+      <p class="hint">The checkout's absolute path <b>on the host</b> — the machine
+         running Podman — not inside this app's container. It is mounted into the
+         builder read-only and synced to a separate build area, so your
+         <span class="mono small">target/</span>, databases and config are left alone.</p>
+      <label class="inline"><input type="checkbox" name="fast_build" value="1"
+        {{ 'checked' if src.fast_build == '1' }}> Fast incremental build</label>
+      <p class="hint">Kawari's release profile is LTO with one codegen unit — the
+         smallest binary, at the slowest compile, with no incremental rebuilds.
+         Fast mode turns those off. Untick it to build exactly as CI does.</p>
+      <p class="hint">Oodle must be installed (Setup): Kawari links against it.
+         Kept between builds: {{ '%.0f' | format(cache_mib) }} MiB of crates,
+         checkouts and compiled output.</p>
+    </fieldset>
+
+    <label>Archive URL <input name="build_url" value="{{ src.build_url }}"
+      placeholder="{{ default_src.build_url }}" autocapitalize="off" spellcheck="false"></label>
+    <p class="hint">Used by “{{ mode_labels['url'] }}” only. For an ARM machine
+       upstream publishes <span class="mono small">kawari-linux-aarch64.zip</span>
+       at the same path.</p>
+
+    <label>Artifact or asset name contains <input name="artifact" value="{{ src.artifact }}"
+      placeholder="leave blank to pick the Linux x86-64 zip" autocapitalize="off" spellcheck="false"></label>
+    <p class="hint">Used by the CI-artifact and release modes when a build
+       publishes more than one file.</p>
+
+    <label>Access token <input name="github_token" type="password"
+      placeholder="{{ 'saved — leave blank to keep' if token_set else 'optional for a public repository' }}"></label>
+    <p class="hint">A token <b>for this forge</b> — a GitHub token does not work on
+       Codeberg or Gitea. Needed for a <b>private</b> repository (your Gitea's
+       ProtoPropski/Kawari, if it is private), and always for CI artifacts.
+       GitHub: repository contents read, plus Actions read for artifacts.
+       Gitea/Forgejo (Settings → Applications): <i>read:repository</i>.
+       It is sent to this forge and nowhere else, and used for git when a source
+       build clones a private repository.</p>
+    <label class="inline"><input type="checkbox" name="clear_token" value="1"> Delete the stored token</label>
+
+    <details>
+      <summary class="dim small">Advanced: API and raw overrides</summary>
+      <label>API override <input name="api_base" value="{{ src.api_base }}"
+        placeholder="{{ src.api_root }}" autocapitalize="off" spellcheck="false"></label>
+      <label>Raw override (GitHub only) <input name="raw_base" value="{{ src.raw_base }}"
+        placeholder="worked out from the forge" autocapitalize="off" spellcheck="false"></label>
+      <p class="hint">Leave both empty — they are worked out from the repository URL. Only
+         needed for GitHub Enterprise or a forge behind an unusual reverse proxy.</p>
+    </details>
+
+    <div class="rowactions">
+      <button class="btn accent">Save source</button>
+      <button class="btn" formaction="{{ url_for('dashboard.test_source') }}">Save and test</button>
+    </div>
+    <p class="hint">Testing asks the forge its version, reads the branch head, one
+       migration file and the README, then resolves the build — everything an update
+       needs, reported separately because they fail separately.</p>
+  </form>
+
+  {% if cache_mib > 0 or src.compiles %}
+  <form method="post" action="{{ url_for('dashboard.clear_build_cache') }}"
+        onsubmit="return confirm('Delete the source build cache? The next build starts from scratch.')">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <button class="btn small">Clear build cache</button>
+    <span class="dim small">for a build that misbehaves in ways a clean build would not</span>
+  </form>
+  {% endif %}
+
+  {% if not src.is_default %}
+  <form method="post" action="{{ url_for('dashboard.reset_source') }}"
+        onsubmit="return confirm('Go back to tracking codeberg.org/redstrate/Kawari? Installed builds are untouched.')">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label class="inline"><input type="checkbox" name="drop_token" value="1"> also delete the stored token</label>
+    <button class="btn">Reset to upstream</button>
+  </form>
+  {% endif %}
+</section>
+
+<details class="card"><summary><b>Update settings</b></summary>
+  <form method="post" action="{{ url_for('dashboard.update_settings') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label>Builds to keep <input type="number" name="keep" value="{{ keep }}" min="1" max="50"></label>
+    <p class="hint">Pruning removes older unpinned builds beyond this count. The
+       GitHub token moved to the Source panel above.</p>
+    <button class="btn">Save</button>
+  </form>
+  <form method="post" action="{{ url_for('dashboard.prune_builds') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <button class="btn">Prune old builds</button>
+  </form>
+</details>
+{% endblock %}

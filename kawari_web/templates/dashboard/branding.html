@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Branding · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+{% include "dashboard/_nav.html" %}
+<form method="post" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <section class="card">
+    <h2>Identity</h2>
+    <label>Server name <input name="site_name" value="{{ brand.site_name }}" maxlength="60"></label>
+    <label>Tagline <input name="tagline" value="{{ brand.tagline }}" maxlength="160"></label>
+    <label>Favicon emoji <input name="favicon_emoji" value="{{ brand.favicon_emoji }}" maxlength="8"></label>
+    <label>Logo image <input type="file" name="logo" accept="image/*"></label>
+    {% if brand.logo %}
+      <p><img class="logo-preview" src="{{ url_for('main.static_upload', name=brand.logo) }}" alt="">
+         <label class="inline"><input type="checkbox" name="clear_logo" value="1"> remove logo</label></p>
+    {% endif %}
+    <label>Footer text <input name="footer" value="{{ brand.footer }}" maxlength="300"></label>
+  </section>
+
+  <section class="card">
+    <h2>Appearance</h2>
+    <label>Accent colour <input name="accent" type="color" value="{{ brand.accent }}"></label>
+    <label>Theme
+      <select name="theme">
+        <option value="dark" {{ 'selected' if brand.theme == 'dark' }}>Dark</option>
+        <option value="light" {{ 'selected' if brand.theme == 'light' }}>Light</option>
+      </select>
+    </label>
+  </section>
+
+  <section class="card">
+    <h2>Home page links</h2>
+    <p class="dim">Shown on the Home page. Leave a row blank to remove it.</p>
+    {% for link in brand.links %}
+      <div class="linkrow">
+        <input name="link_label" value="{{ link.label }}" placeholder="Label">
+        <input name="link_url" value="{{ link.url }}" placeholder="https://">
+      </div>
+    {% endfor %}
+    {% for _ in range(3) %}
+      <div class="linkrow">
+        <input name="link_label" placeholder="Label">
+        <input name="link_url" placeholder="https://">
+      </div>
+    {% endfor %}
+  </section>
+  <p><button class="btn accent" type="submit">Save branding</button></p>
+</form>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Snapshot diff · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+{% include "dashboard/_nav.html" %}
+<section class="card">
+  <h2>{{ snapshot.label }} — {{ snapshot.taken_at }}</h2>
+  <p class="dim">Differences between that snapshot and the character as it is now.</p>
+  {% if lines %}<pre class="logs">{{ lines | join('\n') }}</pre>
+  {% else %}<p class="line ok">Identical to the current database.</p>{% endif %}
+  <p><a class="btn" href="{{ url_for('dashboard.character', content_id=content_id) }}">Back</a></p>
+</section>
+{% endblock %}

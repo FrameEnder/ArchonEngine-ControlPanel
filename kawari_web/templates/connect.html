@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}How to Connect · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>How to connect</h1>
+  <p>{{ branding.site_name }} is a Kawari server. You need the Windows FFXIV client
+     and the <a href="https://xiv.zone/astra/" rel="noopener">Astra</a> launcher
+     (Astra runs the Windows client under Wine on Linux).</p>
+  {% if info.mode == 'local' %}
+  <p class="warn-inline">This server is currently in local-only mode: it advertises
+     <code>127.0.0.1</code>, so only the machine running it can connect. An
+     administrator needs to switch it to LAN/Tailscale mode for remote players.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>1. Get an account</h2>
+  {% if user %}
+    <p>You are signed in as <b>{{ user.display_name or user.username }}</b>. Use that same
+       username and password in the launcher - it is the same account.</p>
+  {% elif info.registration_open %}
+    <p><a class="btn accent" href="{{ url_for('main.register') }}">Create an account</a></p>
+    <p class="dim">One account covers both: the credentials you make here are the ones
+       you type into the launcher.</p>
+  {% else %}
+    <p>Registration is closed on this server. Ask an administrator to create an account
+       for you, then <a href="{{ url_for('main.login') }}">sign in</a>.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>2. Point Astra at this server</h2>
+  <ol class="steps">
+    <li>Astra → <b>Settings</b> → <b>General</b> → enable <b>Show Developer Settings</b>.</li>
+    <li>Go to <b>Settings</b> → your account → the <b>Servers</b> tab.</li>
+    <li>Paste this into <b>Autoconfig Server URL</b>:
+        <div class="copyrow"><code class="mono big">{{ info.autoconfig_url }}</code></div></li>
+    <li>Press <b>Download Configuration</b>. The server fields fill in automatically.</li>
+    <li>Log in with your account. Leave Lodestone, Save Data Bank and Data Center
+        Travel empty - this server does not use them.</li>
+  </ol>
+</section>
+
+<section class="card">
+  <h2>What that fills in</h2>
+  <p class="dim">Astra fetches <code>/.well-known/xiv</code> from the URL above. If you
+     ever need to enter these by hand, these are the current values:</p>
+  <table class="grid">
+    <tr><th>Astra field</th><th>Value</th></tr>
+    <tr><td>Frontier Server</td><td class="mono">{{ info.frontier }}</td></tr>
+    <tr><td>Login Server</td><td class="mono">{{ info.login }}</td></tr>
+    <tr><td>Boot Patch Server</td><td class="mono">{{ info.patch }}</td></tr>
+    <tr><td>Game Patch Server</td><td class="mono">{{ info.patch }}</td></tr>
+    <tr><td>Lobby Server</td><td class="mono">{{ info.lobby_host }}</td></tr>
+    <tr><td>Lobby Port</td><td class="mono">{{ info.lobby_port }}</td></tr>
+    <tr><td>Lodestone Server</td><td class="dim">leave empty</td></tr>
+  </table>
+  <p class="dim">The world server address is sent after character select and is not part
+     of that file; on this server it is <code class="mono">{{ info.world_host }}</code>.</p>
+</section>
+
+<section class="card">
+  <h2>Troubleshooting</h2>
+  <dl class="kv wide">
+    <dt>Astra cannot fetch the configuration</dt>
+    <dd>The server is offline, or port {{ info.web_port }} is blocked by a firewall.</dd>
+    <dt>Login works but the world never loads</dt>
+    <dd>The world server address is wrong or unreachable - an administrator can check it
+        on the dashboard.</dd>
+    <dt>The patch server refuses the login</dt>
+    <dd>Your game client is newer than the server supports. The server currently targets
+        {{ stats.patch or 'an unknown patch' }}.</dd>
+  </dl>
+</section>
+{% endblock %}

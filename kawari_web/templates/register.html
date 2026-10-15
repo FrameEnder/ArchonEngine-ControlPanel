@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Register · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Create an account</h1>
+  <p class="dim">This creates a real game account: the same credentials work in the
+     client and here.</p>
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label>Username <input name="username" required autofocus></label>
+    <label>Password <input name="password" type="password" required></label>
+    <label>Confirm <input name="confirm" type="password" required></label>
+    <p class="warn-inline">The game server stores passwords in plain text. Use one you
+       do not use anywhere else.</p>
+    <button class="btn accent" type="submit">Create account</button>
+  </form>
+</section>
+{% endblock %}

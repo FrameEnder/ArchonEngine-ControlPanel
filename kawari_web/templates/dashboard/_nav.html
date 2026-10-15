@@ -1,0 +1,11 @@
+<nav class="subnav">
+  <a href="{{ url_for('dashboard.overview') }}" class="{{ 'on' if section == 'overview' }}">Overview</a>
+  <a href="{{ url_for('dashboard.setup') }}" class="{{ 'on' if section == 'setup' }}">Setup</a>
+  <a href="{{ url_for('dashboard.updates') }}" class="{{ 'on' if section == 'updates' }}">Updates</a>
+  <a href="{{ url_for('dashboard.config') }}" class="{{ 'on' if section == 'config' }}">Server config</a>
+  <a href="{{ url_for('dashboard.database') }}" class="{{ 'on' if section == 'database' }}">Database</a>
+  <a href="{{ url_for('dashboard.quests') }}" class="{{ 'on' if section == 'quests' }}">Quests</a>
+  <a href="{{ url_for('dashboard.branding') }}" class="{{ 'on' if section == 'branding' }}">Branding</a>
+  <a href="{{ url_for('dashboard.logs') }}" class="{{ 'on' if section == 'logs' }}">Logs</a>
+  <a href="{{ url_for('dashboard.diagnostics') }}" class="{{ 'on' if section == 'diagnostics' }}">Diagnostics</a>
+</nav>

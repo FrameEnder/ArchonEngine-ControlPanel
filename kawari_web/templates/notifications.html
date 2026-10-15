@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Notifications · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Notifications</h1>
+<div class="btnrow">
+  <form method="post" class="inline" action="{{ url_for('social.mark_notifications_read') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <button class="btn">Mark all read</button>
+  </form>
+  <form method="post" class="inline" action="{{ url_for('social.clear_notifications') }}"
+        onsubmit="return confirm('Delete all of your notifications?')">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <button class="btn danger">Clear all</button>
+  </form>
+  <a class="btn" href="{{ url_for('social.settings_page', page='notifications') }}">Settings</a>
+</div>
+
+<section class="card">
+  {% for n in items %}
+  <a class="notif row {{ 'unread' if not n.read_at }}" href="{{ n.link or '#' }}">
+    <span class="kind">{{ n.kind }}</span>
+    <span><b>{{ n.title }}</b>{% if n.body %}<br><span class="dim">{{ n.body }}</span>{% endif %}</span>
+    <span class="dim small">{{ n.created_at }}</span>
+  </a>
+  {% else %}
+  <p class="dim">Nothing here yet.</p>
+  {% endfor %}
+</section>
+{% endblock %}

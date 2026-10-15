@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% from "_post.html" import post_card, composer with context %}
+{% block title %}Feed · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Feed</h1>
+{% if user %}
+  {{ composer(url_for('social.create_post'), url_for('social.feed')) }}
+{% else %}
+  <p class="dim"><a href="{{ url_for('main.login') }}">Sign in</a> to post.</p>
+{% endif %}
+{% for post in posts %}{{ post_card(post) }}{% else %}
+  <div class="card"><p class="dim">No posts yet. Be the first.</p></div>
+{% endfor %}
+{% endblock %}

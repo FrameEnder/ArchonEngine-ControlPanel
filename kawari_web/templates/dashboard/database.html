@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Database · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+{% include "dashboard/_nav.html" %}
+
+{% if db_mismatch %}
+<section class="card warn">
+  <h2>Stored paths point at another machine</h2>
+  <p>{{ db_mismatch }}</p>
+  <p><a class="btn accent" href="{{ url_for('dashboard.setup') }}">Repair on the Setup page</a></p>
+</section>
+{% endif %}
+
+<div class="cols">
+  <section class="card">
+    <h2>Schema health</h2>
+    <p class="dim small">Reading from <span class="mono">{{ db_dir }}</span></p>
+    <p class="dim">Active schema: <span class="mono">{{ schema_label }}</span></p>
+    {% for rep, name in [(world, 'world.db'), (login, 'login.db')] %}
+      <h4>{{ name }}</h4>
+      {% if not rep.present %}<p class="dim">not created yet</p>
+      {% elif rep.ok %}<p class="line ok">Current - no drift.</p>
+      {% else %}
+        <p class="line err">{{ rep.problem_count }} problem(s).</p>
+        <ul class="dim small">
+        {% for t in rep.tables %}{% if not t.ok %}
+          <li>{{ t.table }}: {% if not t.exists %}table missing{% else %}missing
+              {{ t.missing_columns | map(attribute=0) | join(', ') }}{% endif %}</li>
+        {% endif %}{% endfor %}
+        {% for table, count in rep.missing_rows %}<li>{{ table }}: {{ count }} character(s) have no row</li>{% endfor %}
+        </ul>
+      {% endif %}
+    {% endfor %}
+    {% if not world.ok or not login.ok %}
+    <form method="post" action="{{ url_for('dashboard.migrate') }}"
+          onsubmit="return confirm('Back up and migrate both databases?')">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <button class="btn accent">Back up and migrate</button>
+    </form>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Backups</h2>
+    <p class="dim small">{{ backups | length }} archive(s), {{ (backup_bytes / 1048576) | round(1) }} MB
+       in <span class="mono">{{ settings.backups.dir }}</span>. Each holds world.db and
+       login.db.</p>
+    <form method="post" action="{{ url_for('dashboard.backup') }}" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input name="label" placeholder="label" maxlength="30">
+      <button class="btn">Create backup</button>
+    </form>
+
+    <table class="grid">
+      <tr><th>Archive</th><th>Taken</th><th>Size</th><th></th></tr>
+      {% for b in backups %}
+      <tr>
+        <td class="mono small">{{ b.name }}</td>
+        <td class="dim">{{ b.when }}</td>
+        <td class="dim mono small">{{ (b.size / 1048576) | round(1) }} MB</td>
+        <td class="rowactions">
+          <a class="btn small" href="{{ url_for('dashboard.download_backup', name=b.name) }}">Download</a>
+          <form method="post" class="inline"
+                action="{{ url_for('dashboard.restore_backup', name=b.name) }}"
+                onsubmit="return confirm('Replace the current world.db and login.db with {{ b.name }}?\n\nThe current state is saved as a new backup first.')">
+            <input type="hidden" name="csrf" value="{{ csrf_token }}">
+            <button class="btn small">Restore</button>
+          </form>
+          <form method="post" class="inline"
+                action="{{ url_for('dashboard.delete_backup', name=b.name) }}"
+                onsubmit="return confirm('Permanently delete {{ b.name }}?')">
+            <input type="hidden" name="csrf" value="{{ csrf_token }}">
+            <button class="btn small danger">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}<tr><td colspan="4" class="dim">No backups yet.</td></tr>{% endfor %}
+    </table>
+
+    <form method="post" action="{{ url_for('dashboard.prune_backups') }}" class="inline"
+          onsubmit="return confirm('Delete all but the newest backups?')">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label>Keep newest <input type="number" name="keep" value="10" min="0" max="200" class="tiny"></label>
+      <button class="btn small">Delete the rest</button>
+    </form>
+    <p class="hint">Restoring stops nothing by itself - stop the server first, or the
+       restore is refused.</p>
+  </section>
+</div>
+
+{% if problems %}
+<section class="card warn">
+  <h2>Account problems</h2>
+  <ul>{% for p in problems %}<li>{{ p }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Accounts</h2>
+  <table class="grid">
+    <tr><th>Account</th><th>Service acct</th><th>max_ex</th><th>Legacy</th><th>Web profile</th><th></th></tr>
+    {% for a in accounts %}
+      {% set prof = profiles | selectattr('username', 'equalto', a.username) | first %}
+      <tr>
+        <td>{{ a.username or 'user ' ~ a.user_id }}</td>
+        <td class="mono dim">{{ a.id }}</td>
+        <td>{{ a.max_ex }}</td>
+        <td>{{ 'yes' if a.legacy else 'no' }}</td>
+        <td>{% if prof %}{{ 'administrator' if prof.is_admin else 'player' }}{% else %}<span class="dim">none yet</span>{% endif %}</td>
+        <td>
+          {% if prof %}
+          <form method="post" action="{{ url_for('dashboard.set_admin', user_id=prof.user_id) }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+            <input type="hidden" name="is_admin" value="{{ '0' if prof.is_admin else '1' }}">
+            <button class="btn small">{{ 'Revoke admin' if prof.is_admin else 'Make admin' }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+
+  <details class="drop"><summary>Create an account</summary>
+    <form method="post" action="{{ url_for('dashboard.create_account') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label>Username <input name="username" required></label>
+      <label>Password <input name="password" type="password" required></label>
+      <label class="inline"><input type="checkbox" name="is_admin"> Administrator</label>
+      <p class="warn-inline">Kawari stores passwords in plain text. Use one that is not
+         reused anywhere else.</p>
+      <button class="btn accent">Create account</button>
+    </form>
+  </details>
+</section>
+
+<section class="card">
+  <h2>Characters</h2>
+  <table class="grid">
+    <tr><th>Name</th><th>Content ID</th><th>Service acct</th><th>GM</th><th>Zone</th><th></th></tr>
+    {% for c in characters %}
+    <tr>
+      <td><a href="{{ url_for('dashboard.character', content_id=c.content_id) }}">{{ c.name }}</a></td>
+      <td class="mono dim">{{ c.content_id }}</td>
+      <td class="mono dim">{{ c.service_account_id }}</td>
+      <td>{{ 'debug' if (c.gm_rank or 0) >= 90 else '-' }}</td>
+      <td class="dim">{{ c.zone_id or '-' }}</td>
+      <td><a class="btn small" href="{{ url_for('dashboard.character', content_id=c.content_id) }}">Edit</a>
+          <a class="btn small" href="{{ url_for('dashboard.export_character', content_id=c.content_id) }}">Export</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <details class="drop"><summary>Import an Auracite backup</summary>
+    <form method="post" action="{{ url_for('dashboard.import_character') }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label>Backup file <input type="file" name="backup" accept=".zip" required></label>
+      <label>Target character
+        <select name="target">
+          <option value="">Match by name in the backup</option>
+          {% for c in characters %}<option value="{{ c.content_id }}">{{ c.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <fieldset class="sections">
+        <legend>Sections to import</legend>
+        {% for s in sections %}
+          <label class="inline"><input type="checkbox" name="sections" value="{{ s.key }}"
+            {{ 'checked' if s.default }}> {{ s.label }}</label>
+        {% endfor %}
+      </fieldset>
+      <p class="dim small">A snapshot is taken before anything is written.</p>
+      <button class="btn accent">Import backup</button>
+    </form>
+  </details>
+</section>
+{% endblock %}

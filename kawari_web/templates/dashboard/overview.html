@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+{% include "dashboard/_nav.html" %}
+
+{% if db_mismatch %}
+<div class="card warn">
+  <h2>Stored paths point at another machine</h2>
+  <p>{{ db_mismatch }}</p>
+  <p><a class="btn accent" href="{{ url_for('dashboard.setup') }}">Repair on the Setup page</a></p>
+</div>
+{% endif %}
+
+{% if not podman_ok %}
+<div class="card warn">
+  <h2>No Podman access</h2>
+  <p>{{ podman_version }}</p>
+  <p class="dim">Start and stop controls and logs need the rootless Podman API socket.
+     On the host: <code class="mono">systemctl --user enable --now podman.socket</code>,
+     then mount <code class="mono">/run/user/$(id -u)/podman/podman.sock</code> into this
+     container and set <code class="mono">PODMAN_SOCKET</code> to the mounted path.
+     Everything else on this page works without it.</p>
+</div>
+{% endif %}
+
+<div class="cols">
+  <section class="card">
+    <h2>Server</h2>
+    <p><span class="pill {{ 'ok' if stats.running else 'err' }}">{{ stats.status }}</span>
+       <span class="dim">{{ stats.container }}</span></p>
+    {% if not stats.exists and podman_ok %}
+      {% if stats.image_exists %}
+      <form method="post" class="btnrow" action="{{ url_for('dashboard.server_action', action='start') }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <button class="btn accent">Create and start</button>
+      </form>
+      <p class="hint">No container exists yet. This creates it from
+         <span class="mono">{{ stats.image }}:latest</span> with the current ports and
+         mounts, then starts it.</p>
+      {% else %}
+      <p class="line warn">No container and no image yet.
+         <a href="{{ url_for('dashboard.setup') }}">Install the server on the Setup page</a>.</p>
+      {% endif %}
+    {% else %}
+      <form method="post" class="btnrow" action="{{ url_for('dashboard.server_action', action='start') }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <button class="btn accent" {{ 'disabled' if stats.running or not podman_ok }}>Start</button>
+      </form>
+    {% endif %}
+    <form method="post" class="btnrow" action="{{ url_for('dashboard.server_action', action='stop') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <button class="btn" {{ 'disabled' if not stats.running or not podman_ok }}>Stop</button>
+    </form>
+    <form method="post" class="btnrow" action="{{ url_for('dashboard.server_action', action='restart') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <button class="btn" {{ 'disabled' if not podman_ok }}>Restart</button>
+    </form>
+    <dl class="kv">
+      <dt>Podman</dt><dd>{{ podman_version }}</dd>
+      <dt>Build</dt><dd class="mono">{{ stats.build or 'not versioned' }}</dd>
+      <dt>Supports</dt><dd>{{ stats.patch or 'unknown' }}</dd>
+      <dt>Players online</dt><dd>{{ stats.online }} of {{ stats.characters }}</dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>Services</h2>
+    {% if stats.probe_failed %}
+      <p class="line warn">Nothing answered from inside this container on any of:
+         <span class="mono">{{ stats.probe_candidates | join(', ') }}</span>.
+         Clients connect from outside, so this does not mean the server is down.
+         Set <span class="mono">KAWARI_PROBE_HOST</span> if it runs elsewhere.</p>
+    {% elif stats.probe_host %}
+      <p class="dim small">Checked from <span class="mono">{{ stats.probe_host }}</span>
+         (the advertised address <span class="mono">{{ info.host }}</span> is what
+         clients use).</p>
+    {% endif %}
+    <ul class="services">
+      {% for svc in info.services %}
+      <li><span class="dot {{ 'ok' if stats.reachable.get(svc.key) else ('err' if stats.running else 'idle') }}"></span>
+        {{ svc.label }} <span class="dim mono">{{ svc.port }}</span></li>
+      {% endfor %}
+    </ul>
+    <dl class="kv">
+      <dt>Mode</dt><dd>{{ info.mode_label }}</dd>
+      <dt>Advertised</dt><dd class="mono">{{ info.host }}</dd>
+      <dt>Autoconfig</dt><dd class="mono">{{ info.autoconfig_url }}</dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>Announce something</h2>
+    <p class="dim">Sends a notification to every account. Anyone who has turned
+       announcements off in their settings will not receive it.</p>
+    <form method="post" action="{{ url_for('dashboard.announce') }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label>Title <input name="title" maxlength="120" required
+             placeholder="Maintenance at 9pm"></label>
+      <label>Details <textarea name="body" rows="3" maxlength="500"
+             placeholder="Optional"></textarea></label>
+      <button class="btn accent">Send announcement</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Client compatibility</h2>
+    {% for level, message in client %}
+      <p class="line {{ level }}">{{ message }}</p>
+    {% endfor %}
+    <p class="dim small">Checked against the game files at
+       <code class="mono">{{ shell.game_path or 'no game path set' }}</code>.</p>
+  </section>
+</div>
+{% endblock %}

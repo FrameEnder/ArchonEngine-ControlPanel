@@ -1,0 +1,75 @@
+{# One post. `compact` shows it as a feed card linking to the detail page. #}
+{% macro post_card(post, compact=true) %}
+<article class="card post">
+  <header class="post-head">
+    {% if post.avatar %}
+      <img class="avatar-sm" src="{{ url_for('main.static_upload', name=post.avatar) }}" alt="">
+    {% else %}
+      <span class="avatar-sm placeholder">{{ (post.display_name or post.username or '?')[:1]|upper }}</span>
+    {% endif %}
+    <div>
+      <a class="author" href="{{ url_for('main.profile', username=post.username) }}">{{ post.display_name or post.username }}</a>
+      <span class="dim small">{{ post.created_at }}{% if post.edited_at %} · edited{% endif %}</span>
+    </div>
+    {% if user and (user.user_id == post.user_id or user.is_admin) %}
+    <div class="post-actions">
+      {% if user.user_id == post.user_id %}
+      <details class="inlineedit">
+        <summary class="linkbtn">Edit</summary>
+        <form method="post" action="{{ url_for('social.edit_post', post_id=post.id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}">
+          <textarea name="body" rows="4" maxlength="2000">{{ post.body }}</textarea>
+          <button class="btn small accent">Save</button>
+        </form>
+      </details>
+      {% endif %}
+      <form method="post" action="{{ url_for('social.delete_post', post_id=post.id) }}"
+            onsubmit="return confirm('Delete this post and its comments?')">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <button class="linkbtn danger">Delete</button>
+      </form>
+    </div>
+    {% endif %}
+  </header>
+
+  {% if post.body %}<p class="post-body">{{ post.body }}</p>{% endif %}
+
+  {% if post.images %}
+  {# The anchors are real links, so without JavaScript an image still opens.
+     With it, app.js intercepts the click and shows the viewer instead. #}
+  <div class="post-images count-{{ post.images|length }}" data-gallery>
+    {% for image in post.images %}
+      <a class="shot" href="{{ url_for('main.static_upload', name=image) }}"
+         data-shot="{{ loop.index0 }}"
+         aria-label="Open image {{ loop.index }} of {{ post.images|length }}">
+        <img src="{{ url_for('main.static_upload', name=image) }}" alt="" loading="lazy">
+      </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <footer class="post-foot">
+    <a href="{{ url_for('social.post_detail', post_id=post.id) }}">
+      {{ post.comment_count }} comment{{ '' if post.comment_count == 1 else 's' }}</a>
+  </footer>
+</article>
+{% endmacro %}
+
+{% macro composer(action, back='') %}
+<section class="card composer">
+  <form method="post" action="{{ action }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="back" value="{{ back }}">
+    <textarea name="body" rows="3" maxlength="2000"
+              placeholder="Share something with the server..."></textarea>
+    <div class="composer-foot">
+      <label class="filelabel">
+        <span class="filebtn">Add images</span>
+        <input type="file" name="images" accept="image/*" multiple data-filecount>
+        <span class="dim small" data-filecount-label>Up to 4 images, 2000 characters</span>
+      </label>
+      <button class="btn accent" type="submit">Post</button>
+    </div>
+  </form>
+</section>
+{% endmacro %}

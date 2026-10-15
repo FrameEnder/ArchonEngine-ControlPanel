@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <h1>{{ branding.site_name }}</h1>
+  <p>{{ branding.tagline }}</p>
+  <p class="pillrow">
+    <span class="pill {{ 'ok' if stats.running else 'err' }}">{{ 'Online' if stats.running else 'Offline' }}</span>
+    {% if stats.patch %}<span class="pill">Patch {{ stats.patch }}</span>{% endif %}
+    <span class="pill">World {{ info.world_id }}</span>
+  </p>
+  {% if info.login_message %}<blockquote>{{ info.login_message }}</blockquote>{% endif %}
+</section>
+
+<div class="cols">
+  <section class="card">
+    <h2>Server</h2>
+    <dl class="kv">
+      <dt>Status</dt><dd>{{ stats.status }}</dd>
+      <dt>Players online</dt><dd>{{ stats.online }}</dd>
+      <dt>Characters</dt><dd>{{ stats.characters }}</dd>
+      <dt>Accounts</dt><dd>{{ stats.accounts }}</dd>
+      <dt>Highest level</dt><dd>{{ stats.highest_level or '-' }}</dd>
+      {% if stats.build %}<dt>Build</dt><dd class="mono">{{ stats.build }}</dd>{% endif %}
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>Connection</h2>
+    <dl class="kv">
+      <dt>Address</dt><dd class="mono">{{ info.host }}</dd>
+      <dt>Autoconfig URL</dt><dd class="mono">{{ info.autoconfig_url }}</dd>
+      <dt>Lobby</dt><dd class="mono">{{ info.lobby_host }}:{{ info.lobby_port }}</dd>
+      <dt>Mode</dt><dd>{{ info.mode_label }}</dd>
+      <dt>Registration</dt><dd>{% if info.registration_open %}
+        {% if user %}Open{% else %}<a href="{{ url_for('main.register') }}">Open - create an account</a>{% endif %}
+        {% else %}Closed{% endif %}</dd>
+    </dl>
+    <p><a class="btn accent" href="{{ url_for('main.connect') }}">How to connect</a></p>
+  </section>
+
+  <section class="card">
+    <h2>Services</h2>
+    {% if stats.probe_failed %}
+      <p class="line warn">Could not reach these from the web app itself, so their
+         state is unknown here. Players connect from outside and are unaffected.</p>
+    {% endif %}
+    <ul class="services">
+      {% for svc in info.services %}
+      <li>
+        <span class="dot {{ 'ok' if stats.reachable.get(svc.key) else ('err' if stats.running else 'idle') }}"></span>
+        {{ svc.label }} <span class="dim mono">{{ svc.port }}/{{ svc.protocol }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+
+<div class="cols">
+  <section class="card">
+    <h2>Links</h2>
+    <ul class="links">
+      {% for link in branding.links %}<li><a href="{{ link.url }}" rel="noopener">{{ link.label }}</a></li>{% endfor %}
+    </ul>
+  </section>
+  <section class="card">
+    <h2>Players</h2>
+    {% if profiles %}
+      <ul class="players">
+        {% for p in profiles %}
+        <li><a href="{{ url_for('main.profile', username=p.username) }}">{{ p.display_name or p.username }}</a>
+        {% if p.is_admin %}<span class="pill small">admin</span>{% endif %}</li>
+        {% endfor %}
+      </ul>
+    {% else %}<p class="dim">No profiles yet.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+{% block title %}{{ ch.name }} · {{ branding.site_name }}{% endblock %}
+{% macro csrf() %}<input type="hidden" name="csrf" value="{{ csrf_token }}">{% endmacro %}
+{% block content %}
+<h1>Dashboard</h1>
+{% include "dashboard/_nav.html" %}
+
+<section class="card">
+  <h2>{{ ch.name }}</h2>
+  <p class="dim mono">content_id {{ ch.content_id }} · service account
+     {{ ch.get('character', 'service_account_id') }}</p>
+  {% if online and server_running %}
+    <p class="line err">This character is logged in on a running server. Edits are
+       refused: the world server writes it back on logout and would overwrite them.</p>
+  {% elif server_running %}
+    <p class="line info">The server is running but this character is offline, so edits
+       are safe — they are read at the next login.</p>
+  {% endif %}
+</section>
+
+<details class="card" open><summary><b>Identity</b></summary>
+  <form method="post" action="{{ url_for('dashboard.edit_character', content_id=ch.content_id, section='identity') }}">
+    {{ csrf() }}
+    <label>Name <input name="name" value="{{ ch.name }}"></label>
+    <label>GM rank
+      <select name="gm_rank">
+        {% for value, label in [(0, 'Normal player'), (90, 'Debug (full GM commands)')] %}
+          <option value="{{ value }}" {{ 'selected' if ch.get('character','gm_rank',0) == value }}>{{ label }}</option>
+        {% endfor %}
+      </select></label>
+    <label class="inline"><input type="checkbox" name="wol"
+      {{ 'checked' if ch.get('character','warrior_of_light',0) }}> Warrior of Light (1.0 veteran)</label>
+    <label>Time played (minutes) <input type="number" name="time_played"
+      value="{{ ch.get('character','time_played_minutes',0) }}" min="0"></label>
+    <label>Starting city-state
+      <select name="city_state">
+        {% for value, label in cities %}<option value="{{ value }}"
+          {{ 'selected' if ch.get('customize','city_state',1) == value }}>{{ label }}</option>{% endfor %}
+      </select></label>
+    <label>Fantasia (remake mode)
+      <select name="remake_mode">
+        {% for value, label in remakes %}<option value="{{ value }}"
+          {{ 'selected' if ch.get('customize','remake_mode',0) == value }}>{{ label }}</option>{% endfor %}
+      </select></label>
+    <label>First class
+      <select name="first_class">
+        {% for cid, name, abbr in classjobs %}<option value="{{ cid }}"
+          {{ 'selected' if ch.get('classjob','first_class',1) == cid }}>{{ name }} ({{ abbr }})</option>{% endfor %}
+      </select></label>
+    <button class="btn accent">Save identity</button>
+  </form>
+</details>
+
+<details class="card"><summary><b>Location</b></summary>
+  <form method="post" action="{{ url_for('dashboard.edit_character', content_id=ch.content_id, section='location') }}">
+    {{ csrf() }}
+    <label>Zone
+      <select name="zone_id">
+        {% set zid = ch.get('volatile','zone_id',0) %}
+        {% if zid not in territories | map(attribute=0) | list %}
+          <option value="{{ zid }}" selected>Zone {{ zid }} (current)</option>{% endif %}
+        {% for value, label in territories %}<option value="{{ value }}"
+          {{ 'selected' if zid == value }}>{{ label }} ({{ value }})</option>{% endfor %}
+      </select></label>
+    <div class="linkrow">
+      <label>X <input name="x" value="{{ position.x }}"></label>
+      <label>Y <input name="y" value="{{ position.y }}"></label>
+    </div>
+    <div class="linkrow">
+      <label>Z <input name="z" value="{{ position.z }}"></label>
+      <label>Rotation <input name="rotation" value="{{ ch.get('volatile','rotation',0.0) }}"></label>
+    </div>
+    <p class="hint">Stored unscaled. The in-game <code>//gm pos</code> command takes these
+       multiplied by 100.</p>
+    <label>Home point
+      <select name="homepoint">
+        {% for value, label in aetherytes %}<option value="{{ value }}"
+          {{ 'selected' if ch.get('aetheryte','homepoint',0) == value }}>{{ label }}</option>{% endfor %}
+      </select></label>
+    <label>Free destination
+      <select name="free_aetheryte"><option value="0">(none)</option>
+        {% for value, label in aetherytes %}<option value="{{ value }}"
+          {{ 'selected' if ch.get('aetheryte','free_aetheryte',0) == value }}>{{ label }}</option>{% endfor %}
+      </select></label>
+    {% for i in range(4) %}
+      <label>Favourite {{ i + 1 }}
+        <select name="fav{{ i }}"><option value="0">(none)</option>
+          {% for value, label in aetherytes %}<option value="{{ value }}"
+            {{ 'selected' if favourites | length > i and favourites[i] == value }}>{{ label }}</option>{% endfor %}
+        </select></label>
+    {% endfor %}
+    <label>Displayed title
+      <select name="title"><option value="0">(no title)</option>
+        {% for value, label in titles %}<option value="{{ value }}"
+          {{ 'selected' if ch.get('volatile','title',0) == value }}>{{ label }}</option>{% endfor %}
+      </select></label>
+    <label>Current mount id <input type="number" name="mount"
+      value="{{ ch.get('volatile','current_mount',0) }}" min="0"></label>
+    <button class="btn accent">Save location</button>
+  </form>
+</details>
+
+<details class="card"><summary><b>Classes and jobs</b></summary>
+  <form method="post" action="{{ url_for('dashboard.edit_character', content_id=ch.content_id, section='classes') }}">
+    {{ csrf() }}
+    <label>Current class
+      <select name="current_class">
+        {% for cid, name, abbr in classjobs %}<option value="{{ cid }}"
+          {{ 'selected' if ch.get('classjob','current_class',1) == cid }}>{{ name }} ({{ abbr }})</option>{% endfor %}
+      </select></label>
+    <label>Rested EXP <input type="number" name="rested_exp"
+      value="{{ ch.get('classjob','rested_exp',0) }}" min="0"></label>
+    <table class="grid">
+      <tr><th>Class / Job</th><th>Level</th><th>EXP</th><th>Jobs unlocked?</th></tr>
+      {% for row in rows %}
+      <tr class="{{ 'locked' if row.level == 0 }}">
+        <td>{{ row.label }} <span class="dim small">({{ row.abbr }})</span></td>
+        <td><input type="number" name="level{{ row.slot }}" value="{{ row.level }}"
+            min="0" max="{{ row.cap }}" class="tiny"></td>
+        <td><input type="number" name="exp{{ row.slot }}" value="{{ row.exp }}"
+            min="0" max="{{ row.to_next }}" class="tiny"></td>
+        <td class="dim small">
+          {% for j in row.jobs %}{{ j.name }}: {{ 'yes' if j.owned else 'NO CRYSTAL' }}{{ ', ' if not loop.last }}{% else %}-{% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    <p class="hint">A base class and its jobs share one row — Arcanist, Summoner and
+       Scholar are all one slot. A job only appears in the client once its soul crystal
+       is owned, which is separate from the level.</p>
+    <label class="inline"><input type="checkbox" name="grant_crystals" value="1">
+      Also grant missing soul crystals for levelled rows</label>
+    <label>Bulk action
+      <select name="bulk">
+        <option value="">(keep the values above)</option>
+        <option value="max_combat">Max all combat classes</option>
+        <option value="max_crafters">Max all crafters</option>
+        <option value="max_gatherers">Max all gatherers</option>
+        <option value="max_all">Max everything</option>
+      </select></label>
+    <button class="btn accent">Save classes</button>
+  </form>
+</details>
+
+<details class="card"><summary><b>Currency</b></summary>
+  <form method="post" action="{{ url_for('dashboard.edit_character', content_id=ch.content_id, section='currency') }}">
+    {{ csrf() }}
+    {% for key, label, cap, value in currencies %}
+      <label>{{ label }} <input type="number" name="cur_{{ key }}" value="{{ value }}"
+        min="0" max="{{ cap }}"></label>
+    {% endfor %}
+    <p class="hint">Grand Company seals live in one slot shared by all three companies,
+       as upstream stores them.</p>
+    <button class="btn accent">Save currency</button>
+  </form>
+  <form method="post" action="{{ url_for('dashboard.edit_character', content_id=ch.content_id, section='crystals') }}">
+    {{ csrf() }}
+    <label>Set every shard and crystal to <input type="number" name="amount" value="9999" min="0" max="9999"></label>
+    <button class="btn">Apply to all crystals</button>
+  </form>
+</details>
+
+<details class="card"><summary><b>Grand Company</b></summary>
+  <form method="post" action="{{ url_for('dashboard.edit_character', content_id=ch.content_id, section='company') }}">
+    {{ csrf() }}
+    <label>Active company
+      <select name="active_company">
+        {% for value, label in gcs %}<option value="{{ value }}"
+          {{ 'selected' if ch.get('grand_company','active_company',0) == value }}>{{ label }}</option>{% endfor %}
+      </select></label>
+    {% for gid in [1, 2, 3] %}
+      <label>{{ gcs[gid][1] }} rank
+        <select name="rank{{ gid }}"><option value="0">(not enlisted)</option>
+          {% for value, label in gc_ranks[gid] %}<option value="{{ value }}"
+            {{ 'selected' if gc_rank_values | length >= gid and gc_rank_values[gid-1] == value }}>{{ label }}</option>{% endfor %}
+        </select></label>
+    {% endfor %}
+    <button class="btn accent">Save Grand Company</button>
+  </form>
+</details>
+
+<details class="card"><summary><b>Unlocks and collections</b></summary>
+  {% for group in ['Travel', 'Collections', 'Progress', 'Duties'] %}
+    {% set items = masks | selectattr('group', 'equalto', group) | list %}
+    {% if items %}
+    <h4>{{ group }}</h4>
+    <table class="grid">
+      {% for m in items %}
+      <tr>
+        <td>{{ m.label }}{% if m.note %}<br><span class="dim small">{{ m.note }}</span>{% endif %}</td>
+        <td style="width:40%"><span class="bar"><span style="width: {{ m.percent }}%"></span></span></td>
+        <td class="dim mono small">{{ '{:,}'.format(m.set) }} / {{ '{:,}'.format(m.total) }}</td>
+        <td>
+          <form method="post" class="inline" action="{{ url_for('dashboard.edit_character', content_id=ch.content_id, section='unlocks') }}">
+            {{ csrf() }}
+            <input type="hidden" name="table" value="{{ m.table }}">
+            <input type="hidden" name="col" value="{{ m.col }}">
+            <button class="btn small" name="value" value="all">All</button>
+            <button class="btn small" name="value" value="none">None</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% endif %}
+  {% endfor %}
+  <p class="hint">"All" fills every byte with 0xFF at the schema's own length, exactly as
+     Kawari's <code>Bitmask::set_all()</code> does.</p>
+</details>
+
+<details class="card"><summary><b>Chocobo companion</b></summary>
+  <form method="post" action="{{ url_for('dashboard.edit_character', content_id=ch.content_id, section='chocobo') }}">
+    {{ csrf() }}
+    <label>Name <input name="buddy_name" value="{{ ch.get('buddy','name','') }}" maxlength="20"></label>
+    <label>Rank <input type="number" name="buddy_rank" value="{{ ch.get('buddy','rank',0) }}" min="0" max="20"></label>
+    <label>Stars <input type="number" name="buddy_stars" value="{{ ch.get('buddy','stars',0) }}" min="0" max="10"></label>
+    <label>EXP <input type="number" name="buddy_exp" value="{{ ch.get('buddy','exp',0) }}" min="0"></label>
+    <label>Colour (stain id) <input type="number" name="buddy_color" value="{{ ch.get('buddy','color',0) }}" min="0" max="200"></label>
+    {% for i in range(3) %}
+      <label>Skill tree {{ i + 1 }} <input type="number" name="buddy_level{{ i }}"
+        value="{{ buddy_levels[i] if buddy_levels | length > i else 0 }}" min="0" max="10"></label>
+    {% endfor %}
+    <button class="btn accent">Save chocobo</button>
+  </form>
+</details>
+
+<details class="card"><summary><b>Social</b></summary>
+  <form method="post" action="{{ url_for('dashboard.edit_character', content_id=ch.content_id, section='social') }}">
+    {{ csrf() }}
+    <label>Search comment <input name="comment" maxlength="60"
+      value="{{ ch.get('search_info','comment','') }}"></label>
+    <label>Online status id <input type="number" name="online_status"
+      value="{{ ch.get('search_info','online_status',0) }}" min="0" max="255"></label>
+    {% set langs = ch.get('search_info','selected_languages',0) %}
+    {% for bit, label in [(1,'Japanese'), (2,'English'), (4,'German'), (8,'French')] %}
+      <label class="inline"><input type="checkbox" name="lang{{ bit }}"
+        {{ 'checked' if langs and (langs // bit) % 2 == 1 }}> {{ label }}</label>
+    {% endfor %}
+    <div>
+    {% for col, label in [('is_battle','Battle mentor'), ('is_trade','Trade mentor'),
+                          ('is_novice','New adventurer'), ('is_returner','Returner')] %}
+      <label class="inline"><input type="checkbox" name="{{ col }}"
+        {{ 'checked' if ch.get('mentor', col, 0) }}> {{ label }}</label>
+    {% endfor %}
+    </div>
+    <button class="btn accent">Save social</button>
+  </form>
+</details>
+
+<details class="card"><summary><b>History and snapshots</b></summary>
+  <p class="dim">Every save snapshots first, so any edit here is undoable.</p>
+  <form method="post" class="inline" action="{{ url_for('dashboard.snapshot_character', content_id=ch.content_id) }}">
+    {{ csrf() }}
+    <input name="label" placeholder="label" maxlength="40">
+    <button class="btn">Take snapshot</button>
+  </form>
+  <table class="grid">
+    <tr><th>Taken</th><th>Label</th><th>Build</th><th></th></tr>
+    {% for snap in snapshots %}
+    <tr>
+      <td class="dim">{{ snap.taken_at }}</td><td>{{ snap.label }}</td>
+      <td class="mono dim small">{{ snap.build[:9] }}</td>
+      <td>
+        <a class="btn small" href="{{ url_for('dashboard.snapshot_diff', content_id=ch.content_id, name=snap.path.name) }}">Diff</a>
+        <form method="post" class="inline" action="{{ url_for('dashboard.restore_snapshot', content_id=ch.content_id) }}"
+              onsubmit="return confirm('Restore this snapshot?')">
+          {{ csrf() }}
+          <input type="hidden" name="snapshot" value="{{ snap.path.name }}">
+          <button class="btn small">Restore</button>
+        </form>
+        <form method="post" class="inline" action="{{ url_for('dashboard.delete_snapshot', content_id=ch.content_id) }}"
+              onsubmit="return confirm('Delete this snapshot permanently?')">
+          {{ csrf() }}
+          <input type="hidden" name="snapshot" value="{{ snap.path.name }}">
+          <button class="btn small danger">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}<tr><td colspan="4" class="dim">No snapshots yet.</td></tr>{% endfor %}
+  </table>
+</details>
+
+<details class="card"><summary><b>Danger zone</b></summary>
+  <form method="post" action="{{ url_for('dashboard.delete_character', content_id=ch.content_id) }}">
+    {{ csrf() }}
+    <input type="hidden" name="name" value="{{ ch.name }}">
+    <label>Type <b>{{ ch.name }}</b> to delete this character permanently
+      <input name="confirm" autocomplete="off"></label>
+    <button class="btn danger">Delete character</button>
+  </form>
+</details>
+{% endblock %}

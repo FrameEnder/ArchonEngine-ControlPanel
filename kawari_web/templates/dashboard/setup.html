@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Setup · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+{% include "dashboard/_nav.html" %}
+
+{% if busy %}<div class="card warn"><p>A background job is running. Wait for it to
+  finish before starting another - they share the container and databases.</p></div>{% endif %}
+
+{% if db_mismatch %}
+<section class="card warn">
+  <h2>Stored paths point at another machine</h2>
+  <p>{{ db_mismatch }}</p>
+  <p class="dim">This happens after moving the data directory to a different host:
+     <code class="mono">settings.conf</code> records absolute paths from wherever the
+     server was first set up.</p>
+  <form method="post" action="{{ url_for('dashboard.repair_paths') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <button class="btn accent">Repair paths for this machine</button>
+  </form>
+  <p class="hint">Sets DATA_DIR to <span class="mono">{{ host_data_dir }}/data</span>.
+     The game path is separate - set it below if the game files also moved.</p>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>1. Game files</h2>
+  <p class="dim">The folder containing <code>sqpack/</code> and
+     <code>ffxiv_dx11.exe</code> on the server machine. This is a host path: it is
+     bind-mounted into the game container, so it must be readable by the host.</p>
+  <form method="post" action="{{ url_for('dashboard.set_game_path') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label>Game path <input name="game_path" value="{{ shell.game_path }}"
+           placeholder="/home/you/.local/share/astra/…/game"></label>
+    <button class="btn">Save game path</button>
+  </form>
+  {% if containerised and not game_visible %}
+    <p class="line info">This path is on the host and is not mounted into the web
+       container, so it cannot be checked from here. It is passed to Podman as a host
+       path when the game container is created, which is what matters. To have it
+       validated here as well, mount it read-only into this container at the same
+       path.</p>
+  {% else %}
+    <p class="line {{ 'ok' if game.valid else 'warn' }}">{{ game.note }}</p>
+  {% endif %}
+  {% if game.repos %}<p class="dim small">Repositories: {{ game.repos | join(', ') }} —
+     implies max_ex {{ game.max_ex }}.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>2. Kawari build</h2>
+  <dl class="kv">
+    <dt>Installed</dt><dd>{% if active %}{{ active.short }} — supports {{ active.patch_text }}
+      {% else %}nothing yet{% endif %}</dd>
+    <dt>Oodle</dt><dd>{{ 'installed' if oodle else 'missing — required' }}</dd>
+    <dt>Builds kept</dt><dd>{{ store.ledger.builds | length }}</dd>
+  </dl>
+  <p class="dim">Oodle is not in the upstream archive and has to be supplied once.
+     Download <code>gcc-x64-release.zip</code> from WorkingRobot/OodleUE and upload it
+     here; it is copied into every stored build under both file names, because Linux
+     links against <code>liboodle-network-shared.so</code>.</p>
+  <form method="post" action="{{ url_for('dashboard.upload_oodle') }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label>Oodle zip or .so <input type="file" name="oodle" accept=".zip,.so" required></label>
+    <button class="btn">Install Oodle</button>
+  </form>
+
+  <hr class="sep">
+  <form method="post" action="{{ url_for('dashboard.install_build') }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <p>Install or reinstall the server: fetch the build, version it, generate its schema
+       map, build the image and create the container.</p>
+    <label class="inline"><input type="radio" name="source" value="download" checked> Download the latest build</label>
+    <label class="inline"><input type="radio" name="source" value="upload"> Upload an archive</label>
+    <label>Archive (only for upload) <input type="file" name="archive" accept=".zip"></label>
+    <p class="hint">Downloading takes it from
+       <a href="{{ src.repo_url }}" rel="noopener">{{ src.slug }}</a> @ {{ src.branch }}
+       ({{ mode_labels[src.build_mode] }}){% if not src.is_default %} — a fork, not
+       upstream{% endif %}. Change that under
+       <a href="{{ url_for('dashboard.updates') }}#source">Updates &gt; Source</a>.</p>
+    <button class="btn accent" {{ 'disabled' if busy or not podman_ok }}>Install</button>
+    {% if not podman_ok %}<p class="warn-inline">Needs the Podman API socket.</p>{% endif %}
+  </form>
+</section>
+
+<section class="card">
+  <h2>3. How clients reach the server</h2>
+  <form method="post" action="{{ url_for('dashboard.set_network') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    {% for key, label, help in modes %}
+      <label class="inline"><input type="radio" name="mode" value="{{ key }}"
+        {{ 'checked' if shell.mode == key }}> {{ label }}</label>
+      <p class="hint">{{ help }}</p>
+    {% endfor %}
+    <label>Advertised address <input name="address" value="{{ shell.ip }}"></label>
+    <p class="dim small">Detected: {% for ip, what in addresses %}<code class="mono">{{ ip }}</code> ({{ what }}){{ '; ' if not loop.last }}{% endfor %}</p>
+    <label class="inline"><input type="checkbox" name="expose_admin" {{ 'checked' if expose_admin }}>
+      Publish the admin port (21057) on all interfaces</label>
+    <p class="hint">Kawari's admin panel has no authentication of any kind, and the game
+       client never uses that port. Leaving this off keeps it on loopback.</p>
+    <button class="btn accent">Apply and rewrite config.yaml</button>
+  </form>
+
+  <table class="grid">
+    <tr><th>Service</th><th>Port</th><th>Binds to</th><th>Reachable by</th></tr>
+    {% for row in ports %}
+    <tr><td>{{ row.label }}</td><td class="mono">{{ row.port }}</td>
+        <td class="mono">{{ row.bind }}</td><td class="dim">{{ row.who }}</td></tr>
+    {% endfor %}
+  </table>
+
+  <p>Clients paste this into Astra's <b>Autoconfig Server URL</b>:</p>
+  <div class="copyrow"><code class="mono big">{{ autoconfig }}</code></div>
+  <p><a class="btn" href="{{ url_for('dashboard.verify_autoconfig') }}">Verify what clients will receive</a></p>
+</section>
+
+<section class="card">
+  <h2>4. Container</h2>
+  <form method="post" action="{{ url_for('dashboard.recreate_container') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <p class="dim">Recreate the container after changing ports or the advertised
+       address. Databases live on the host volume and are not affected.</p>
+    <button class="btn" {{ 'disabled' if busy or not podman_ok }}>Recreate and start</button>
+  </form>
+</section>
+
+<details class="card"><summary><b>Hosts file entries (local-only mode)</b></summary>
+  <p class="dim">Only needed when the server advertises <code>*.ffxiv.localhost</code>,
+     i.e. local mode. Not needed for LAN or Tailscale.</p>
+  <pre class="logs">{{ hosts }}</pre>
+</details>
+{% endblock %}

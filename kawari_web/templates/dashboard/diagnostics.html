@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Diagnostics · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+{% include "dashboard/_nav.html" %}
+
+<div class="cols">
+  <section class="card">
+    <h2>Send diagnostics</h2>
+    <p class="dim">Bundles the server log, packet captures, the chosen characters' saved quest state and
+      position, and Kawari Probe snapshots, and commits them to the private repository below.
+      Game files never go in it.</p>
+    {% if not repo or not has_token %}
+      <p class="line err">Set the repository and token first.</p>
+    {% endif %}
+    <form method="post" action="{{ url_for('dashboard.diagnostics_send') }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label>What happened
+        <textarea name="note" rows="3" placeholder="Talked to Madelle, journal didn't tick; walked to Old Gridania and it hung"></textarea>
+      </label>
+      <label>Include the last
+        <input type="number" name="minutes" value="60" min="5" max="1440"> minutes
+      </label>
+      <fieldset>
+        <legend>Characters</legend>
+        {% for c in characters %}
+          <label class="inline"><input type="checkbox" name="characters" value="{{ c.content_id }}"
+            {{ 'checked' if c.content_id in default_ids or (not default_ids and loop.first) }}> {{ c.name }}</label>
+        {% else %}
+          <p class="dim">No characters in world.db.</p>
+        {% endfor %}
+      </fieldset>
+      <button class="btn accent" {{ 'disabled' if not repo or not has_token }}>Send diagnostics</button>
+    </form>
+    {% if last_sent %}
+      <p class="dim small">Last sent {{ last_sent }}{% if last_url %} · <a href="{{ last_url }}">commit</a>{% endif %}</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Packet capture</h2>
+    <dl class="kv">
+      <dt>Capture</dt><dd>{% if capture.enabled %}<span class="line ok">on</span>{% else %}off{% endif %}
+        {% if capture.enabled and not capture.dir_ok %}<span class="line err">writing outside the data folder - turn it on again here</span>{% endif %}</dd>
+      <dt>Files</dt><dd>{{ capture.files | length }}{% if capture.files %} newest shown,
+        {{ (capture.total / 1048576) | round(1) }} MiB in total{% endif %}</dd>
+      <dt>Navmeshes</dt><dd>{% if capture.navmesh_kept %}kept between builds{% else %}
+        <span class="line err">regenerated after every rebuild</span>{% endif %}</dd>
+    </dl>
+    <p class="dim small">Records every packet between the server and the game. Needs a build that has the
+      <span class="mono">packet_capture</span> option (the fork, from ed897d8). Turn it off when you're done;
+      the files grow quickly.</p>
+    <form method="post" action="{{ url_for('dashboard.diagnostics_capture') }}" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label class="inline"><input type="checkbox" name="restart" checked> Restart the server now</label>
+      {% if capture.enabled %}
+        <button class="btn" name="action" value="off">Turn capture off</button>
+      {% else %}
+        <button class="btn accent" name="action" value="on">Turn capture on</button>
+      {% endif %}
+      {% if not capture.navmesh_kept %}
+        <button class="btn" name="action" value="navmesh">Keep navmeshes between builds</button>
+      {% endif %}
+      {% if capture.files %}
+        <button class="btn" name="action" value="clear">Delete captures</button>
+      {% endif %}
+    </form>
+    {% if capture.files %}
+    <table class="grid small">
+      <tr><th>File</th><th>Size</th><th>Last written</th></tr>
+      {% for f in capture.files %}
+      <tr><td class="mono">{{ f.name }}</td><td>{{ (f.size / 1024) | round | int }} KiB</td><td>{{ f.at }}</td></tr>
+      {% endfor %}
+    </table>
+    {% endif %}
+  </section>
+</div>
+
+<div class="cols">
+  <section class="card">
+    <h2>Kawari Probe</h2>
+    <p class="dim">The Dalamud plugin that reports what the game client itself believes. Point it at this
+      site with your character sync token (Settings → Character sync), then use
+      <span class="mono">/kprobe</span> in game.</p>
+    {% if snapshots %}
+      <table class="grid small">
+        <tr><th>Snapshot</th></tr>
+        {% for name in snapshots %}
+        <tr><td class="mono"><a href="{{ url_for('dashboard.diagnostics_snapshot', name=name) }}">{{ name }}</a></td></tr>
+        {% endfor %}
+      </table>
+      {% if latest %}
+        <dl class="kv">
+          <dt>Latest</dt><dd>{{ latest.character or '' }} · zone {{ latest.territory or '?' }}
+            · {{ (latest.quests or []) | length }} quest(s){% if latest.label %} · “{{ latest.label }}”{% endif %}</dd>
+        </dl>
+      {% endif %}
+    {% else %}
+      <p class="dim">No snapshots yet.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Repository</h2>
+    <p class="dim">A <strong>private</strong> GitHub repository, and a fine-grained token limited to that one
+      repository with <em>Contents: Read and write</em>. The token is stored in webapp.db and never shown again.</p>
+    <form method="post" action="{{ url_for('dashboard.diagnostics_repo') }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label>Repository <input type="text" name="repo" value="{{ repo }}" placeholder="FrameEnder/kawari-diagnostics"></label>
+      <label>Branch <input type="text" name="branch" value="{{ branch }}"></label>
+      <label>Token <input type="password" name="token" value="" autocomplete="off"
+        placeholder="{{ 'saved - leave empty to keep it' if has_token else 'github_pat_…' }}"></label>
+      <button class="btn" name="action" value="save">Save</button>
+      <button class="btn" name="action" value="test">Save and test</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

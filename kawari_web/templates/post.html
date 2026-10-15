@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% from "_post.html" import post_card with context %}
+{% block title %}Post by {{ post.display_name or post.username }}{% endblock %}
+
+{% macro comment_block(c, depth) %}
+<div class="comment depth-{{ depth }}">
+  <header class="comment-head">
+    {% if c.avatar %}
+      <img class="avatar-xs" src="{{ url_for('main.static_upload', name=c.avatar) }}" alt="">
+    {% else %}
+      <span class="avatar-xs placeholder">{{ (c.display_name or c.username or '?')[:1]|upper }}</span>
+    {% endif %}
+    <a class="author" href="{{ url_for('main.profile', username=c.username) }}">{{ c.display_name or c.username }}</a>
+    <span class="dim small">{{ c.created_at }}{% if c.edited_at %} · edited{% endif %}</span>
+  </header>
+  <p class="comment-body">{{ c.body }}</p>
+  <div class="comment-actions">
+    {% if user %}
+    <details class="inlineedit">
+      <summary class="linkbtn">Reply</summary>
+      <form method="post" action="{{ url_for('social.add_comment', post_id=post.id) }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <input type="hidden" name="parent_id" value="{{ c.id }}">
+        <textarea name="body" rows="2" maxlength="1000" placeholder="Reply..."></textarea>
+        <button class="btn small accent">Reply</button>
+      </form>
+    </details>
+    {% endif %}
+    {% if user and user.user_id == c.user_id %}
+    <details class="inlineedit">
+      <summary class="linkbtn">Edit</summary>
+      <form method="post" action="{{ url_for('social.edit_comment', comment_id=c.id) }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <textarea name="body" rows="2" maxlength="1000">{{ c.body }}</textarea>
+        <button class="btn small accent">Save</button>
+      </form>
+    </details>
+    {% endif %}
+    {% if user and (user.user_id == c.user_id or user.is_admin) %}
+    <form method="post" action="{{ url_for('social.delete_comment', comment_id=c.id) }}"
+          onsubmit="return confirm('Delete this comment and any replies to it?')">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <button class="linkbtn danger">Delete</button>
+    </form>
+    {% endif %}
+  </div>
+  {% for reply in c.replies %}{{ comment_block(reply, depth + 1) }}{% endfor %}
+</div>
+{% endmacro %}
+
+{% block content %}
+{{ post_card(post, false) }}
+
+<section class="card">
+  <h2>{{ post.comment_count }} comment{{ '' if post.comment_count == 1 else 's' }}</h2>
+  {% if user %}
+  <form method="post" action="{{ url_for('social.add_comment', post_id=post.id) }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <textarea name="body" rows="3" maxlength="{{ comment_max }}" placeholder="Add a comment..."></textarea>
+    <button class="btn accent">Comment</button>
+  </form>
+  {% else %}
+    <p class="dim"><a href="{{ url_for('main.login') }}">Sign in</a> to comment.</p>
+  {% endif %}
+
+  <div class="comments">
+    {% for c in comments %}{{ comment_block(c, 0) }}{% else %}
+      <p class="dim">No comments yet.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

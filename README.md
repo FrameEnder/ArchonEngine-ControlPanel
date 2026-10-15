@@ -1,0 +1,508 @@
+# Kawari Web
+
+A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
+FFXIV server, built to run in a rootless Podman container. Version 2.10.0.
+
+It shares its logic with the desktop manager: `kawari_core/` is the same
+database, Auracite, schema and version code, with the Qt dependency removed.
+
+## Run it
+
+```bash
+cd ~/Documents/Server/FFXIV/kawari-web
+./run.sh
+```
+
+Then open `http://127.0.0.1:7301`. Use the literal address, not `localhost`:
+`localhost` resolves to the IPv6 loopback `::1` first on most systems, and
+rootless Podman publishes on IPv4 only, so the browser's first attempt is refused
+and it does not fall back. From another machine, use the server's LAN or
+Tailscale address and open the port in firewalld.
+
+`run.sh` builds the image, mounts your
+`~/.kawari` directory, and mounts the rootless Podman API socket if it exists.
+
+To let the dashboard start and stop the game server, enable the socket once:
+
+```bash
+systemctl --user enable --now podman.socket
+```
+
+Without it the site still works; only the container controls and log view are
+disabled, and the dashboard says so rather than failing silently.
+
+## Live character sync
+
+**Settings → Character sync** issues a token for the Kawari Companion plugin,
+which uploads the character from the game client on a schedule. The endpoint is
+`POST /api/sync` with `Authorization: Bearer <token>`, taking an Auracite
+character document or zip, and `GET /api/sync/ping` reports which characters the
+token may write.
+
+Every rule is enforced here rather than in the plugin, which runs on a machine
+this server does not control:
+
+* a token is bound to one account; only characters on that account can be written
+* a character logged in on a running server is refused, since the world server
+  would overwrite the sync on logout
+* a snapshot is taken before every applied sync, so it is undoable
+* nothing is created and nothing is renamed - an unknown name is refused
+* rate limited to one sync per 30 seconds, payload capped at 6 MB
+* which sections a sync may touch is yours to choose; appearance is opt-in
+
+## Running it as a service
+
+`run.sh` is for trying things out: the container restarts if it crashes, but
+nothing starts it after a reboot. For a permanent install:
+
+```bash
+./install-service.sh
+```
+
+That builds the image, enables linger (without which a rootless user service
+stops when you log out), writes a systemd unit with your paths, starts it and
+checks it answers. `Restart=always` is systemd's equivalent of
+`--restart unless-stopped`: it comes back whenever it exits, and
+`systemctl --user stop kawari-web` keeps it stopped until you start it again.
+
+It uses a quadlet unit where podman supports it (4.4 and later) and a plain
+systemd unit otherwise. `kawari-web.container` is the quadlet it writes, if you
+would rather place it by hand.
+
+```bash
+systemctl --user status kawari-web      # how it is doing
+systemctl --user restart kawari-web
+systemctl --user stop kawari-web        # stays stopped
+journalctl --user -u kawari-web -f      # follow the log
+./install-service.sh --remove           # undo it
+```
+
+The installer refuses to go ahead if the data directory is not writable or your
+user has no `/etc/subuid` entry, since both produce failures that look like
+something else later.
+
+### Configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `KAWARI_DATA_DIR` | `~/.kawari` | Kawari config directory: databases, config.yaml, backups |
+| `KAWARI_WEB_DIR` | `<data>/web` | Web app state: `webapp.db` and uploads |
+| `PODMAN_SOCKET` | *(unset)* | Path to the mounted Podman API socket |
+| `KAWARI_HOST_DATA_DIR` | same as data dir | The data directory **as the host sees it** |
+| `KAWARI_WEB_HOST` / `KAWARI_WEB_PORT` | `0.0.0.0` / `7301` | Bind address inside the container |
+
+The default is 7301 rather than 8080, which is taken on most machines running
+anything else. To use a different one:
+
+```bash
+PORT=9000 ./run.sh          # publishes 9000 on the host
+```
+
+`PORT` only changes the host side of the mapping. The app inside the container
+always listens on `KAWARI_WEB_PORT`, and `run.sh` maps `PORT` to it, so the two
+never have to agree. If you change the published port, remember the value shown
+on the How to Connect page is Kawari's own web port (21062), not this one — they
+are different services.
+
+## Moving the server to another machine
+
+`settings.conf` records absolute **host** paths (`DATA_DIR`, `GAME_PATH`) from
+wherever the server was first set up, so copying the data directory to a
+different host leaves them pointing at nothing - a different username, or
+`/var/home` on an ostree system versus `/home` elsewhere, is enough.
+
+The app no longer trusts those paths blindly: it tries the configured location,
+then the conventional `<data dir>/data`, and uses whichever actually holds the
+databases. When the configured path is wrong it says so on the Overview, Database
+and Setup pages, with a **Repair paths for this machine** button that rewrites
+`DATA_DIR`. That matters beyond display, because the same value builds the game
+container's bind mount.
+
+The game path is separate and cannot be guessed - set it on the Setup page if the
+game files moved too.
+
+## If it will not start
+
+```bash
+./diagnose.sh
+```
+
+That prints which image and container actually exist, when each was built, the
+user namespace mode in effect, what the container sees at `/data`, and whether
+the running image contains the current code. Since 2.1.3 the app also prints a
+banner before anything can fail:
+
+```
+Kawari Web 2.1.3 starting
+  uid=1000 gid=1000
+  data dir : /data
+  data dir owner uid=1000 gid=1000, writable=True
+```
+
+If the version in that banner is not the one you just built, an old container is
+still running - `run.sh` now stops a quadlet-managed unit first, and prints the
+image and container IDs after starting.
+
+## First run
+
+Until an administrator exists, every URL redirects to `/setup`, which offers two
+routes:
+
+- **Import the accounts already on this server.** Reads `login.db`, gives every
+  account a profile, and you choose which one is the administrator. Passwords are
+  untouched — people sign in with their game password.
+- **Create the first account.** Creates a real Kawari account (a `user` plus its
+  `service_account`), so it works in the game client too. This also builds
+  `login.db` from scratch if the server has never run, recording the Diesel
+  migration the way the server does so it is not applied twice.
+
+## Pages
+
+**Home** — server status, population, the connection details, service reachability
+dots, configurable links, and the player list.
+
+**How to Connect** — a walkthrough for Astra, with this server's live values
+filled in: the autoconfig URL to paste, and the individual field values in case
+they are needed by hand. It warns when the server is in local-only mode, because
+then no remote client can reach it.
+
+**Feed and profiles** — posts with text (up to 2000 characters) and up to four
+images, comments, and threaded replies. A single image is shown whole rather
+than cropped; two, three or four tile into a fixed frame. Clicking one opens a
+viewer in the same tab, with arrow keys, Escape and a counter for multi-image
+posts. The markup is plain links, so with JavaScript off an image still opens. Authors can edit or delete their own
+posts and comments; deleting a comment removes its replies with it.
+Administrators can remove anyone's. Every profile shows that player's posts; the
+Feed page shows everyone's.
+
+**Notifications** — a bell in the top bar with an unread badge and a dropdown.
+Delivered for comments on your posts, replies to your comments, the game server
+starting or stopping, and administrator announcements. Turning a kind off in
+Settings stops delivery entirely rather than hiding it after the fact. Server
+state is noticed on requests, rate-limited to one check every 20 seconds, since
+there is no scheduler.
+
+**Settings** — categorised: Profile, Security, Notifications and Characters.
+Security changes the password for this site **and** the game launcher, because
+there is only one account; it verifies the current password first.
+
+**Top bar** — brand and navigation on the left, bell and account menu on the
+right. Signed out it shows Sign in and Register instead. The menus are `<details>`
+elements, so none of it needs JavaScript.
+
+**Profile** — banner, avatar, bio, and two tabs: **Posts** (the default) and
+**Characters**, each with a count. A character is drawn as a tile board: identity,
+current class, classes levelled, a 33-tile job grid shaded by level, story,
+collections, travel, duties and purse, with the full class table and EXP behind
+one collapsed tile. The grid drops to 6 then 5 columns as the screen narrows and
+the tiles restack. The tab is a query parameter rather than
+client-side state, so a link to someone's characters stays one, and the character
+stats are only computed when that tab is actually open. Characters are
+**private by default**: a visibility row exists only once the owner publishes one,
+so absence means hidden. Each character has collapsible sections, closed by
+default, for class levels (with which jobs have their soul crystal), unlocks and
+collections as progress bars, and other stats.
+
+**Dashboard** (administrators only) — server start/stop/restart, service and
+client-version checks, the full `config.yaml` editor, database health and
+migration, backups, account creation and admin promotion, Auracite import and
+export, branding, and container logs. Non-admins get a 403 on every dashboard
+route, including the POST actions, not just a hidden nav link.
+
+**Branding** — server name, tagline, emoji favicon, logo, accent colour, light or
+dark theme, footer text, and the Home page links.
+
+## Quest Lab
+
+**Dashboard → Quests** wraps the quest-scripting loop around the fork's
+`kawari-questdump` (FrameEnder/Kawari, `tools/questdump`): dump a quest, read
+what the client does, script it, build, put a character at the right point,
+test.
+
+* **Running the tool.** It runs in a throwaway container made from the
+  *active* server image, with the server's game folder and config mounted
+  read-only, so it always matches the running build and the server needn't be
+  up. Output lands in `<data>/quest-dumps/`. Story chains, specific quests (by
+  ID, script or name), raw game files, and `index`. Only a build of the fork
+  from source includes the tool; the page says so otherwise.
+* **The quest index** (`kawari-questdump index`, added in fork commit 4556bf1)
+  is every quest's name, level, prerequisites, issuer and area. It powers
+  search across all quests and prerequisite completion. Without it both still
+  work, over the dumped quests only.
+* **Script check.** Each dumped quest's script is read from the active build
+  (what the server runs now) and compared with its dump. **Needs a look**
+  means it names a quest variable the Quest sheet doesn't have (silently `nil`
+  in Lua: a typo or version drift) or plays a scene the client script doesn't
+  contain. Scenes are counted as played through `SEQ_*` variables, literal
+  numbers and the `SCENE_*` constants the Sapphire-derived scripts use; client
+  scenes the script never names are listed. A `-- NOTE:` mentioning
+  "unverified" marks the script **unverified**.
+* **Quest page.** Variables (the ones the script uses in bold), objectives,
+  listeners and rewards; the fork script beside the client listing; the
+  quests before and after; downloads of each dump file.
+* **Testing.** Copyable `//gm quest …` commands work live while logged in.
+  "Set up a character" edits the database instead (logged out, snapshot
+  first): it completes the prerequisites, raises the current class to the
+  quest's level, and leaves the quest ready to accept, in progress at a chosen
+  sequence, completed, or never started. "Any one of" prerequisites take one
+  branch — one already done, else the quest's own city — so a Gridania tester
+  doesn't get Limsa's and Ul'dah's story too. Quest completion is Kawari's
+  most-significant-bit-first quest bitmask.
+* **Bundle.** One zip of the selected dumps, the scripts the server runs for
+  them, `Global.lua`, optionally the index, and a `MANIFEST.md` of the checks:
+  the attachment for whoever writes the next quests. Dumps are Square Enix's
+  files; keep them private and out of git.
+
+## Diagnostics
+
+**Dashboard → Diagnostics** gathers what someone debugging the server remotely
+needs, and commits it as one bundle to a private GitHub repository:
+
+* the world server's recent log;
+* packet captures - turn capture on here (it sets `world.packet_capture` in
+  config.yaml and writes to `<data>/captures`, which survives rebuilds; needs a
+  fork build from ed897d8 on). Turn it off when you're done, the files grow fast;
+* the chosen characters' saved quest state and position, read from world.db;
+* snapshots from the **Kawari Probe** Dalamud plugin, which reports what the
+  game client itself believes (its quest list and variables, key items, zone,
+  position, conditions). It posts to `POST /api/diag/snapshot` with the same
+  token as character sync;
+* which build is running, and the server config with secrets removed.
+
+It needs the repository (`owner/name`) and a fine-grained GitHub token limited
+to that one repository with *Contents: Read and write*. Game files never go in a
+bundle.
+
+The page can also point `filesystem.navimesh_path` at `<data>/navimesh`, so
+navmeshes are kept between builds instead of regenerated (slowly) after every
+container rebuild.
+
+## Tracking a fork
+
+Everything that reaches out to the Kawari project goes through one place
+(`kawari_core/upstream.py`), so **Dashboard → Updates → Source** can point the
+whole installation at any repository on any of the supported forges. Three
+things move together, and they have to:
+
+* the **API**, for the changelog, the commit list and how far behind the
+  active build is
+* the **source files at a commit**, which the database schema map is *derived*
+  from. A fork that changes a Diesel migration must be read from the fork, or
+  the generated migration would reconcile the database against the wrong column
+  list
+* the **build**: an archive to download, or the checkout a source build compiles
+
+### Forges
+
+Paste the repository's web address; the forge, owner, repository and any branch
+in the URL are worked out from it.
+
+| Forge | Example | Notes |
+| --- | --- | --- |
+| **Codeberg** (Forgejo) | `https://codeberg.org/redstrate/Kawari` | Upstream's home since it left GitHub, and the default. |
+| **Gitea / Forgejo**, self-hosted | `http://100.79.235.78:3769/ProtoPropski/Kawari` | Plain http and a Tailscale address are fine; this machine must be on the tailnet. |
+| **GitHub** | `https://github.com/FrameEnder/Kawari` | GitHub Enterprise through the API override. |
+
+Codeberg runs Forgejo, a fork of Gitea, so Codeberg and a self-hosted Gitea or
+Forgejo are one code path. It was tested against a real Gitea 1.24 with a
+**private** repository. The differences from GitHub are handled: Gitea's compare
+lists commits newest first and counts `total_commits` (GitHub: oldest first,
+`ahead_by`); Gitea authenticates API and git with `token <t>`; its raw-file
+endpoint serves private files directly; a private release asset downloads from
+the web host. Where a Gitea or Forgejo lacks `/compare`, the history is walked
+instead.
+
+**Tokens are per forge**: a GitHub token is useless on Codeberg. A token is
+sent only to the forge's own API and web hosts, never to a third-party archive
+URL, and it is what a source build uses to clone a private repository.
+
+**Upstream moved.** A source saved by 2.6–2.8 meant GitHub and stays on GitHub,
+so a saved fork there keeps working. One still tracking upstream's old GitHub
+repository gets a one-click **Track codeberg.org/redstrate/Kawari**.
+
+### Builds
+
+Upstream publishes the newest build to xiv.zone, which a fork obviously does
+not, so the build can come from any of:
+
+| Build source | What it does | Specific commit? |
+| --- | --- | --- |
+| Download: direct archive URL | Downloads a fixed `.zip`. How upstream publishes, so for a fork it installs **upstream's** code. The Source panel says so in red. | No: the URL serves what it serves |
+| Download: latest CI artifact | Newest green CI run on the branch. GitHub; Gitea 1.23+. Forgejo has no artifact API yet. | Yes, by the run's commit |
+| Download: latest release asset | Newest release's asset. | Yes, by tag |
+| **Build from source: clone the branch** | Fetches and compiles here. | **Yes: any commit, short commit, tag or branch** |
+| **Build from source: a folder on this server** | Compiles the checkout you are editing, uncommitted changes included. | Check it out in the folder |
+
+Upstream's CI moved to Forgejo Actions on Codeberg. Whether its deploy job still
+publishes to xiv.zone could not be checked from here; if the URL stops
+updating, build from source.
+
+### Installing a specific commit
+
+**Updates → Install a specific commit** takes any commit, short commit, tag or
+branch, and "Check for updates" lists the branch's newest 30 commits with an
+Install button each (the active one is marked; one already installed points at
+the Version history, where switching is a retag). An install goes through the
+same steps as an update: backup, character snapshot, schema map *from that
+commit*, image, activate, recreate. A short commit cannot be fetched by name,
+so the builder falls back to fetching every branch and tag and resolving it.
+
+### Building from source
+
+For working on the server itself. A builder image (`localhost/kawari-builder`:
+the Rust image plus cmake, clang/libclang and rsync, which recastnavigation's
+bindgen needs) is built once; each build runs a throwaway container through the
+Podman socket and packages exactly the file list CI's upload step does. From
+there it goes through the normal pipeline: backup, schema, image, activate,
+migrate, recreate.
+
+* **Folder mode** takes the checkout's path **on the host**. It is mounted
+  read-only and synced into a separate build area, honouring `.gitignore`, so
+  your `target/`, `config.yaml` and databases are untouched. Committed and
+  clean, a build is versioned by its commit. With uncommitted changes it is
+  `<commit>-dev<yymmddHHMMSS>` and tagged *dev* in the history, so it can never
+  pass for the commit it started from — and each rebuild gets its own image tag.
+* **The schema comes from the tree that was compiled**, not GitHub: an
+  unpushed migration change is exactly what the database step must see.
+* **Kept between builds** under `<data>/source/`: the cargo registry, the git
+  checkout and the target dirs. Measured on a 2-core machine: the first build
+  of the workspace took 4.5 minutes in fast mode, and an edit to the world
+  server rebuilt in under a second. *Clear build cache* starts over.
+* **Fast incremental build** (default) turns off the workspace's LTO and single
+  codegen unit. Untick it to build exactly as CI does, which is much slower and
+  has no incremental rebuilds.
+* "Build and install" is always offered in these modes, because only the build
+  knows whether anything changed. If it compiles to the active build, nothing is
+  installed.
+* Deleting or pruning a build also removes its image tag, since a dev loop
+  makes a new one every time.
+
+With several artifacts or assets per build, *"name contains"* picks between them;
+left blank it takes the one that looks like a Linux x86-64 zip and avoids
+`aarch64`, `debug` and `windows`. A fork's CI artifact is commonly a zip inside
+GitHub's own zip, or one folder deep — both are unwrapped.
+
+**Private forks work.** `raw.githubusercontent.com` cannot serve a private
+repository, so per-commit file reads fall back to the Contents API, which the
+token can open. The token is sent to the configured API host and nowhere else,
+so a third-party archive URL never sees it.
+
+**Test this source** does the four things an update needs — reads the branch
+head, one migration file and the README, then resolves the build archive — and
+reports each separately, because they fail separately. A source that does not
+pass is still saved, so a typo can be corrected rather than retyped.
+
+Builds are versioned by commit, so installed builds are unaffected by changing
+the source and the history records where each came from. Switching source can
+leave the ledger holding a commit the new repository has never seen; the version
+check notices that, says so, and skips the changelog rather than failing.
+`Reset to upstream` restores `redstrate/Kawari` and keeps the token.
+
+## Accounts
+
+Identity lives in Kawari's own `user` table, so there is no second set of
+credentials. The web app's `webapp.db` only hangs extra data off a user id:
+admin flag, display name, bio, avatar, banner, and which characters are public.
+Kawari's databases are never modified by the account system.
+
+Kawari stores and compares passwords **in plain text**
+(`selected_user.password == for_password`), so this front end cannot be more
+secure than that. Do not reuse a password from anywhere else, and do not expose
+this site to the internet without putting a TLS-terminating reverse proxy and
+your own access control in front of it.
+
+### Why `--userns=keep-id` matters
+
+In rootless Podman, container uid 0 maps to your host user and every other uid
+maps into your subuid range. So a container running as uid 1000 sees a directory
+you own as root-owned, and cannot write to it — which shows up as
+`PermissionError: [Errno 13] Permission denied: '/data/web'` on startup, repeated
+forever by the restart policy.
+
+`--userns=keep-id` maps your host uid to the same uid inside the container, so
+the mounted data directory is writable and the Podman socket stays reachable.
+`run.sh` and the quadlet unit both set it. If you run the container by hand, you
+need it too.
+
+### Reaching the game server from inside the container
+
+The address the server advertises to clients (your LAN or Tailscale IP) is
+usually **not** reachable from inside this container: rootless Podman gives it
+its own network namespace, and the host's published ports are not on the
+container's view of that address. Probing it directly makes every service look
+down while clients connect perfectly well.
+
+So the app probes `host.containers.internal` first, then the advertised address,
+then loopback, and uses whichever answers — while still checking the *contents*
+of `/.well-known/xiv` against the advertised address, because that is what
+clients are handed. The address actually used is shown on the dashboard.
+
+If the game server runs on a different machine from this web app, set
+`KAWARI_PROBE_HOST` to where it is reachable.
+
+### Why `KAWARI_HOST_DATA_DIR` matters
+
+Podman runs on the host, so when this app asks it to create the Kawari container,
+the bind-mount paths in that request are resolved **by the host**. Inside this
+container the data directory is `/data`, which the host knows nothing about, so
+the app translates paths before building a container spec. `run.sh` and the
+quadlet unit set this automatically; set it yourself only if you mount things
+differently.
+
+## Starting the server
+
+The Overview's primary button adapts to what exists: **Create and start** when
+there is an image but no container, plain **Start** when the container exists,
+and a pointer to Setup when neither does. Creating builds the container spec from
+the current ports, mounts and advertised address, so it also picks up changes
+made on the Setup page.
+
+## Long-running operations
+
+Installing, updating and switching builds take minutes, so they run as background
+jobs on their own thread with a live progress page: each step reports its own
+result and the log streams into the browser. Only one job runs at a time - they
+all touch the same container, image and databases, and letting two overlap is how
+a database gets corrupted.
+
+Job state is deliberately in-memory. If the app restarts mid-update, the job is
+gone rather than looking resumable when the process running it no longer exists.
+
+## Feature parity
+
+Everything from the desktop app is here:
+
+| Area | Where |
+|---|---|
+| Install Kawari, Oodle, build the image, create the container | Dashboard → Setup |
+| Networking mode, port preview, autoconfig verification, hosts snippet | Dashboard → Setup |
+| Version check, changelog, schema preview, update, rollback, pinning, pruning | Dashboard → Updates |
+| Tracking a fork on GitHub, Codeberg or Gitea/Forgejo; installing a specific commit (web only) | Dashboard → Updates |
+| Every `config.yaml` key | Dashboard → Server config |
+| Schema health, migration, accounts, Auracite import/export | Dashboard → Database |
+| Backups: create, download, restore, delete, prune to the newest N | Dashboard → Database |
+| Builds: switch, pin, delete, prune | Dashboard → Updates |
+| Character snapshots: diff, restore, delete | Dashboard → a character |
+| Full character editor: identity, location, classes, currency, Grand Company, unlocks, chocobo, social, snapshots, delete | Dashboard → Database → a character |
+| Branding, logs | Dashboard → Branding / Logs |
+
+The desktop app remains usable against the same data directory, but the web app
+is now the complete one.
+
+## Layout
+
+```
+kawari_core/     shared, Qt-free: dbtools, chardata, auracite, schemagen,
+                 versions, upstream, questlab, gamedata,
+                 constants, core
+kawari_web/      Flask app: config, webdb, auth, podman_api, stats, app,
+                 dashboard, upstreamcfg, srcbuild, questlab,
+                 templates/, static/
+Containerfile    rootless-friendly image, runs as a non-root user
+run.sh           build + run with the right mounts
+kawari-web.container  systemd quadlet unit
+```
+
+`kawari_core` is currently a copy of the desktop app's logic modules. Making the
+desktop app import the same package, rather than carrying its own copy, is the
+obvious next step.

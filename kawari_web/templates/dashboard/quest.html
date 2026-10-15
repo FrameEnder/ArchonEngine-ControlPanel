@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}{{ q.name or entry.name or quest_id }} · Quests · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+{% include "dashboard/_nav.html" %}
+
+<p class="small"><a href="{{ url_for('dashboard.quests') }}">← Quest Lab</a></p>
+
+<section class="card">
+  <h2>{{ q.name or entry.name or ('Quest ' ~ quest_id) }}
+    {% if analysis %}<span class="qstatus {{ analysis.status }}">{{ labels[analysis.status] }}</span>{% endif %}</h2>
+  <dl class="kv wide">
+    <dt>Quest</dt><dd class="mono">{{ quest_id }} · event {{ quest_id + 65536 }} · {{ q.script or entry.script }}</dd>
+    <dt>Level</dt><dd>{{ q.level or entry.level }}{% if q.class_category or entry.class_category_name %} · {{ q.class_category or entry.class_category_name }}{% endif %}</dd>
+    {% if q.place or entry.place_name %}<dt>Area</dt><dd>{{ q.place or entry.place_name }}</dd>{% endif %}
+    {% if q.issuer_start %}<dt>Starts with</dt><dd>{{ q.issuer_start.label or q.issuer_start.value }}</dd>{% endif %}
+    {% if q.target_end %}<dt>Ends with</dt><dd>{{ q.target_end.label or q.target_end.value }}</dd>{% endif %}
+    <dt>After</dt><dd>
+      {% for p in previous %}<a href="{{ url_for('dashboard.quest', quest_id=p.id) }}">{{ p.name or p.id }}</a>{{ (' or ' if join_any else ', ') if not loop.last }}{% else %}<span class="dim">nothing</span>{% endfor %}</dd>
+    {% if following %}<dt>Leads to</dt><dd>
+      {% for f in following %}<a href="{{ url_for('dashboard.quest', quest_id=f.id) }}">{{ f.name or f.id }}</a>{{ ', ' if not loop.last }}{% endfor %}</dd>{% endif %}
+    <dt>Fork script</dt><dd class="mono small">{% if lua %}resources/scripts/{{ script_rel }}{% else %}<span class="dim">none at resources/scripts/{{ script_rel }}</span>{% endif %}</dd>
+  </dl>
+  <div class="rowactions">
+    {% if dump %}
+      {% for f in dump.files() %}<a class="btn small" href="{{ url_for('dashboard.quest_file', quest_id=quest_id, name=f.name, download=1) }}">{{ f.name }}</a>{% endfor %}
+    {% endif %}
+    <form method="post" action="{{ url_for('dashboard.quests_run') }}" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="command" value="dump">
+      <input type="hidden" name="quests" value="{{ quest_id }}">
+      <input type="hidden" name="listing" value="on">
+      <button class="btn small accent" {{ 'disabled' if busy or not status.ok }}>{{ 'Dump again' if dump else 'Dump this quest' }}</button>
+    </form>
+  </div>
+  {% if not status.ok %}<p class="hint">{{ status.reason }}</p>{% endif %}
+</section>
+
+{% if analysis %}
+<section class="card">
+  <h2>Script check</h2>
+  {% if not analysis.scripted %}
+    <p class="line warn">The active build has no script for this quest yet.</p>
+  {% else %}
+    {% if analysis.unknown_names %}
+      <p class="line err">The script names {{ analysis.unknown_names | length }} quest variable(s) the
+         Quest sheet doesn't have — in Lua they are silently <span class="mono">nil</span>:
+         <span class="mono">{{ analysis.unknown_names | join(', ') }}</span></p>
+    {% endif %}
+    {% if analysis.unknown_scenes %}
+      <p class="line err">It plays scene(s) the client script doesn't contain:
+         <span class="mono">{{ analysis.unknown_scenes | join(', ') }}</span></p>
+    {% endif %}
+    {% for n in analysis.notes %}<p class="line {{ 'warn' if 'unverified' in n | lower else 'info' }}">{{ n }}</p>{% endfor %}
+    {% if not analysis.unknown_names and not analysis.unknown_scenes and not analysis.notes %}
+      <p class="line ok">Every quest variable it names exists, and every scene it plays is in the client script.</p>
+    {% endif %}
+  {% endif %}
+  {% if analysis.client_scenes %}
+    <h4>Client scenes</h4>
+    <div class="scenes">
+      {% for n in analysis.client_scenes %}
+        <span class="scene {{ 'played' if n in analysis.played else 'unplayed' }}"
+              title="{{ 'played by the script' if n in analysis.played else 'never named by the script' }}">{{ n }}</span>
+      {% endfor %}
+    </div>
+    <p class="hint">Highlighted scenes are named by the script, through a <span class="mono">SEQ_*</span>
+       variable or a literal scene number. The rest may be skipped on purpose, or be a branch that was
+       missed — the listing below shows what each one does.</p>
+  {% endif %}
+  {% if analysis.outline %}
+    <h4>Outline (from the script's header)</h4>
+    <ul class="checks">{% for line in analysis.outline %}<li>{{ line }}</li>{% endfor %}</ul>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="card" id="prepare">
+  <h2>Test it</h2>
+  <div class="cols">
+    <div>
+      <h3>Live, while logged in</h3>
+      <p class="dim small">The client's own GM commands. They act straight away, no relog — but
+         they don't complete prerequisites or set levels.</p>
+      <table class="grid">
+        {% for label, cmd in gm %}
+        <tr><td class="small">{{ label }}</td><td class="mono small">{{ cmd }}</td>
+            <td><button type="button" class="btn small" data-copy="{{ cmd }}">Copy</button></td></tr>
+        {% endfor %}
+      </table>
+    </div>
+    <form method="post" action="{{ url_for('dashboard.quest_prepare', quest_id=quest_id) }}" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <h3>Set up a character</h3>
+      <p class="dim small">Edits the database, so the character must be logged out (or the server
+         stopped). A snapshot is taken first.</p>
+      <label>Character
+        <select name="content_id">
+          <option value="">Choose…</option>
+          {% for c in characters %}
+          <option value="{{ c.content_id }}">{{ c.name }}{{ ' (online)' if c.is_online and server_running }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Leave the quest
+        <select name="state">
+          {% for key, label in states.items() %}<option value="{{ key }}" {{ 'selected' if key == 'available' }}>{{ label }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Sequence (for “in progress”) <input type="number" name="sequence" value="1" min="0" max="255"></label>
+      <label class="inline"><input type="checkbox" name="prereqs" checked>
+        Complete its prerequisites ({{ prereq_count }}{{ '' if have_index else ', dumped quests only' }})</label>
+      <label class="inline"><input type="checkbox" name="level" checked> Raise the current class to its level</label>
+      {% if prereq_unknown %}<p class="hint">{{ prereq_unknown | length }} prerequisite(s) aren't in the
+        {{ 'quest index' if have_index else 'dumps' }}, so what comes before them can't be followed —
+        {{ 'build the quest index' if not have_index else 'they are completed as they are' }}.</p>{% endif %}
+      <button class="btn accent">Apply</button>
+    </form>
+  </div>
+</section>
+
+{% if q %}
+<details class="card"><summary><b>Quest data</b> — variables, objectives, listeners, rewards</summary>
+  <div class="cols">
+    <div>
+      <h4>Variables ({{ q.params | length }})</h4>
+      <table class="grid">
+        <tr><th>Name</th><th>Value</th><th></th></tr>
+        {% for p in q.params %}
+        <tr class="{{ 'used' if analysis and p.name in analysis.used_params }}">
+          <td class="mono small">{{ p.name }}</td><td class="mono small">{{ p.value }}</td>
+          <td class="small dim">{{ p.label or '' }}</td></tr>
+        {% endfor %}
+      </table>
+      {% if analysis and analysis.scripted %}<p class="hint">Bold rows are named by the fork's script.</p>{% endif %}
+    </div>
+    <div>
+      {% if q.todos %}
+      <h4>Objectives</h4>
+      <table class="grid">
+        <tr><th>#</th><th>Done at sequence</th><th>Count</th></tr>
+        {% for t in q.todos %}<tr><td>{{ t.index }}</td><td>{{ t.complete_sequence }}</td><td>{{ t.quantity or '' }}</td></tr>{% endfor %}
+      </table>
+      {% endif %}
+      {% if q.listeners %}
+      <h4>Listeners</h4>
+      <table class="grid">
+        <tr><th>Actor</th><th>Appears</th><th>Leaves</th></tr>
+        {% for l in q.listeners %}<tr><td class="small">{{ l.label or l.listener }}</td>
+          <td class="small">seq {{ l.spawn_sequence }}</td><td class="small">seq {{ l.despawn_sequence }}</td></tr>{% endfor %}
+      </table>
+      {% endif %}
+      {% if q.rewards %}
+      <h4>Rewards</h4>
+      <p class="small">{{ q.rewards.gil }} gil · EXP factor {{ q.rewards.exp_factor }}
+        {% if q.rewards['items'] %} · items {% for i in q.rewards['items'] %}{{ i.item }}×{{ i.count }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}
+        {% if q.rewards.optional_items %} · choice of {% for i in q.rewards.optional_items %}{{ i.item }}×{{ i.count }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}</p>
+      {% endif %}
+    </div>
+  </div>
+</details>
+{% endif %}
+
+{% if lua or listing %}
+<div class="cols code-pair">
+  {% if lua %}
+  <details class="card" open><summary><b>Fork script</b> <span class="dim small mono">{{ script_rel }}</span></summary>
+    <pre class="logs code">{{ lua }}</pre>
+  </details>
+  {% endif %}
+  {% if listing %}
+  <details class="card" {{ 'open' if lua }}><summary><b>Client script listing</b></summary>
+    <pre class="logs code">{{ listing }}</pre>
+  </details>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

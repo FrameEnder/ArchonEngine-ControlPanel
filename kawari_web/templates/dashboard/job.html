@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ job.title }} · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+{% include "dashboard/_nav.html" %}
+<section class="card">
+  <h2 id="job-title">{{ job.title }}</h2>
+  <p><span id="job-state" class="pill">{{ job.state }}</span>
+     <span id="job-summary" class="dim">{{ job.summary }}</span></p>
+  <ol id="job-steps" class="steps joblist">
+    {% for step in job.steps %}
+      <li class="{{ step.state }}"><b>{{ step.label }}</b> <span class="dim">{{ step.detail }}</span></li>
+    {% endfor %}
+  </ol>
+  <pre id="job-log" class="logs">{{ job.log }}</pre>
+  <p><a class="btn" href="{{ url_for('dashboard.' ~ back) }}">Back</a></p>
+</section>
+<script>
+(function () {
+  var id = {{ job.id | tojson }};
+  var done = {{ (job.state != 'running') | tojson }};
+  function paint(data) {
+    document.getElementById('job-state').textContent = data.state;
+    document.getElementById('job-state').className = 'pill ' +
+      (data.state === 'done' ? 'ok' : data.state === 'failed' ? 'err' : '');
+    document.getElementById('job-summary').textContent = data.summary || (data.elapsed + 's');
+    var steps = document.getElementById('job-steps');
+    steps.innerHTML = data.steps.map(function (s) {
+      return '<li class="' + s.state + '"><b>' + s.label + '</b> <span class="dim">' +
+             (s.detail || '') + '</span></li>';
+    }).join('');
+    var log = document.getElementById('job-log');
+    var stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 30;
+    log.textContent = data.log;
+    if (stick) { log.scrollTop = log.scrollHeight; }
+    if (data.state !== 'running') { done = true; }
+  }
+  function poll() {
+    if (done) { return; }
+    fetch({{ url_for('dashboard.job_json', job_id=job.id) | tojson }})
+      .then(function (r) { return r.json(); })
+      .then(paint)
+      .catch(function () {})
+      .then(function () { if (!done) { setTimeout(poll, 1200); } });
+  }
+  poll();
+})();
+</script>
+{% endblock %}
