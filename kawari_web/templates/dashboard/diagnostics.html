@@ -4,6 +4,15 @@
 <h1>Dashboard</h1>
 {% include "dashboard/_nav.html" %}
 
+{% if quest_test %}
+<section class="card">
+  <p><span class="pill ok">Testing</span> Quest Lab is testing
+     <a href="{{ url_for('dashboard.quest', quest_id=quest_test.quest) }}#test">quest {{ quest_test.quest }}
+     {{ quest_test.name }}</a> on {{ quest_test.character }} since {{ quest_test.since }}. Finish it there to send
+     a bundle tagged with the quest.</p>
+</section>
+{% endif %}
+
 <div class="cols">
   <section class="card">
     <h2>Send diagnostics</h2>

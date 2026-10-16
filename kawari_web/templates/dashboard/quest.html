@@ -119,6 +119,65 @@
   </div>
 </section>
 
+<section class="card" id="test">
+  <h2>Test this quest</h2>
+  {% if test and test.quest == quest_id %}
+  <p><span class="pill ok">Testing</span> {{ test.character }}, from {{ test.from }}, since {{ test.since }}
+     ({{ test.minutes }} min). Play the quest in game, then send what happened.</p>
+  <form method="post" action="{{ url_for('dashboard.quest_test_finish') }}" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label>What happened (optional)
+      <textarea name="note" rows="3" placeholder="e.g. Keitha didn't take the cargo"></textarea></label>
+    {% if not test.capture_was_on %}
+    <label class="inline"><input type="checkbox" name="capture_off" checked> Turn packet capture back off afterwards</label>
+    <label class="inline"><input type="checkbox" name="restart"> and restart the server</label>
+    {% endif %}
+    <div class="rowactions">
+      <button class="btn accent">Finish the test and send it</button>
+      <button class="btn" formaction="{{ url_for('dashboard.quest_test_cancel') }}">Cancel without sending</button>
+    </div>
+  </form>
+  <p class="dim small">The bundle covers the whole test ({{ test.minutes + 2 }} minutes) and names the quest, so
+     <code>questkit triage</code> follows this quest and <code>questkit compare</code> knows what to check.</p>
+  {% elif test %}
+  <p>A test of <a href="{{ url_for('dashboard.quest', quest_id=test.quest) }}">quest {{ test.quest }}</a> is
+     running ({{ test.character }}, since {{ test.since }}). Finish or cancel it there first.</p>
+  {% else %}
+  <p class="dim small">Sets the character up (as above: logged out, snapshot first), turns packet capture on, and
+     remembers when the test started. When you're done, one button sends a diagnostics bundle covering exactly the
+     test, tagged with this quest.</p>
+  <form method="post" action="{{ url_for('dashboard.quest_test_start', quest_id=quest_id) }}" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <div class="cols">
+      <label>Character
+        <select name="content_id">
+          <option value="">Choose…</option>
+          {% for c in characters %}
+          <option value="{{ c.content_id }}">{{ c.name }}{{ ' (online)' if c.is_online and server_running }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Start from
+        <select name="state">
+          <option value="available" selected>Ready to accept</option>
+          <option value="active">In progress, at the sequence below</option>
+        </select>
+      </label>
+      <label>Sequence <input type="number" name="sequence" value="1" min="0" max="255"></label>
+    </div>
+    <label class="inline"><input type="checkbox" name="prereqs" checked> Complete its prerequisites</label>
+    <label class="inline"><input type="checkbox" name="level" checked> Raise the current class to its level</label>
+    {% if capture_on %}
+    <p class="dim small">Packet capture is already on.</p>
+    {% else %}
+    <label class="inline"><input type="checkbox" name="restart" {{ 'checked' if server_running }}>
+      Restart the server so packet capture starts (it's off now, and only read at startup)</label>
+    {% endif %}
+    <button class="btn accent">Start the test</button>
+  </form>
+  {% endif %}
+</section>
+
 {% if q %}
 <details class="card"><summary><b>Quest data</b> — variables, objectives, listeners, rewards</summary>
   <div class="cols">

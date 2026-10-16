@@ -263,7 +263,20 @@ def quest(quest_id: int):
         gm=Q.gm_commands(dump.quest if dump else {"quest_id": quest_id}),
         characters=[dict(c) for c in chars], states=Q.STATES,
         status=tool_status(), busy=runner().busy,
-        server_running=_server_running())
+        server_running=_server_running(), test=_current_test(), capture_on=_capture_on())
+
+
+def _current_test():
+    from .questtest import current_test
+    return current_test()
+
+
+def _capture_on() -> bool:
+    from .diagnostics import capture_status
+    try:
+        return capture_status()["enabled"]
+    except Exception:                                   # noqa: BLE001
+        return False
 
 
 @dashboard.route("/quests/<int:quest_id>/file/<name>")
@@ -282,44 +295,46 @@ def quest_file(quest_id: int, name: str):
                      else "application/octet-stream", download_name=name)
 
 
-@dashboard.route("/quests/<int:quest_id>/prepare", methods=["POST"])
-@auth.admin_required
-def quest_prepare(quest_id: int):
-    """Put a test character at a point in this quest."""
+def prepare_character(quest_id: int, form) -> tuple[bool, str, object]:
+    """Put a character at a point in a quest, from a form's content_id, state, sequence, prereqs and level.
+    Returns (whether it worked, what to tell the admin, the character.) Shared by "Set up a character" and
+    "Start a test"."""
     try:
-        content_id = int(request.form.get("content_id", "0"))
+        content_id = int(form.get("content_id", "0"))
     except ValueError:
         content_id = 0
-    back = redirect(url_for("dashboard.quest", quest_id=quest_id) + "#prepare")
     if not content_id:
-        flash("Choose a character.", "err")
-        return back
+        return False, "Choose a character.", None
     ch, error = _guarded(content_id)
     if error:
-        flash(error + " Use the //gm commands on this page instead - they work while "
-                      "logged in.", "err")
-        return back
-    state = request.form.get("state", "available")
+        return False, error + " Use the //gm commands on this page instead - they work while logged in.", None
+    state = form.get("state", "available")
     try:
-        sequence = int(request.form.get("sequence") or 1)
+        sequence = int(form.get("sequence") or 1)
     except ValueError:
         sequence = 1
     root = _root()
     graph = Q.graph(Q.load_index(root), Q.scan_dumps(root))
     try:
         done = Q.prepare(ch, graph, quest_id, state, sequence,
-                         with_prerequisites=request.form.get("prereqs") == "on",
-                         level_up=request.form.get("level") == "on")
+                         with_prerequisites=form.get("prereqs") == "on",
+                         level_up=form.get("level") == "on")
     except Exception as exc:                            # noqa: BLE001
-        flash(f"Could not apply: {exc}", "err")
-        return back
+        return False, f"Could not apply: {exc}", ch
     if not ch.dirty:
-        flash(f"{ch.name}: nothing to change - {'; '.join(done)}.", "info")
-        return back
+        return True, f"{ch.name}: nothing to change - {'; '.join(done)}.", ch
     written = _commit(ch, content_id, f"before-quest-{quest_id}")
-    flash(f"{ch.name}: {'; '.join(done)}. Saved {written}; a snapshot was taken first, "
-          f"so the character page can restore it.", "ok")
-    return back
+    return True, (f"{ch.name}: {'; '.join(done)}. Saved {written}; a snapshot was taken first, "
+                  f"so the character page can restore it."), ch
+
+
+@dashboard.route("/quests/<int:quest_id>/prepare", methods=["POST"])
+@auth.admin_required
+def quest_prepare(quest_id: int):
+    """Put a test character at a point in this quest."""
+    ok, message, _ch = prepare_character(quest_id, request.form)
+    flash(message, "info" if ok and "nothing to change" in message else "ok" if ok else "err")
+    return redirect(url_for("dashboard.quest", quest_id=quest_id) + "#prepare")
 
 
 # ════════════════════════════════════════════════════════════════════════════

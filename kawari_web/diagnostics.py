@@ -365,8 +365,10 @@ def _github() -> GitHub:
 # ════════════════════════════════════════════════════════════════════════════
 #  The bundle
 # ════════════════════════════════════════════════════════════════════════════
-def build_bundle(note: str, content_ids: list[int], minutes: int) -> tuple[str, dict]:
-    """Returns (folder name, {path: bytes})."""
+def build_bundle(note: str, content_ids: list[int], minutes: int,
+                 quest_test: dict | None = None) -> tuple[str, dict]:
+    """Returns (folder name, {path: bytes}). quest_test is Quest Lab's test session, if the bundle ends one: which
+    quest was tested, on whom, from which step, since when (it goes in meta.json for questkit triage.)"""
     since = time.time() - minutes * 60
     stamp = time.strftime("%Y%m%d-%H%M%S")
     slug = re.sub(r"[^a-z0-9]+", "-", note.lower()).strip("-")[:40]
@@ -392,6 +394,8 @@ def build_bundle(note: str, content_ids: list[int], minutes: int) -> tuple[str, 
             "snapshots": [f"snapshots/{p.name}" for p in snapshots],
         },
     }
+    if quest_test:
+        meta["quest_test"] = quest_test
 
     files[f"{folder}/meta.json"] = json.dumps(meta, indent=1).encode()
     files[f"{folder}/server.log"] = _server_log().encode("utf-8", "replace")
@@ -414,6 +418,10 @@ def _readme(meta: dict, characters: list, captures: list, snapshots: list) -> st
     lines.append(f"* Build: `{build.get('short') or build.get('active') or 'unknown'}`"
                  + (f" ({build['message']})" if build.get("message") else ""))
     lines.append(f"* Window: last {meta['window_minutes']} minutes")
+    test = meta.get("quest_test")
+    if test:
+        lines.append(f"* Quest test: quest {test.get('quest')} ({test.get('name', '')}) on {test.get('character', '')},"
+                     f" from {test.get('from', '')}, started {test.get('started', '')}")
     lines.append(f"* Packet captures: {len(captures)}, probe snapshots: {len(snapshots)}")
     lines.append("")
     for ch in characters:
@@ -455,7 +463,36 @@ def diagnostics():
         last_sent=_get("last_sent"), last_url=_get("last_url"),
         snapshots=[p.name for p in snapshots], latest=latest,
         default_ids=[int(x) for x in _get("characters").split(",") if x.isdigit()],
+        quest_test=_quest_test(),
     )
+
+
+def _quest_test():
+    from .questtest import current_test
+    return current_test()
+
+
+def set_capture(enabled: bool, restart: bool) -> tuple[bool, str]:
+    """Turn the world server's packet capture on or off in config.yaml, and restart the server if asked (it only
+    reads the option at startup.) Returns (whether it was saved, what happened.)"""
+    s = settings()
+    cfg = s.server_config()
+    if cfg.error:
+        return False, f"config.yaml can't be edited: {cfg.error}"
+    cfg.set_value("world", "packet_capture", enabled)
+    if enabled:
+        cfg.set_value("world", "packet_capture_dir", CONTAINER_CAPTURE_DIR)
+    try:
+        cfg.save(advertise_ip=s.shell.ip, write_server_names=False)
+    except Exception as exc:                            # noqa: BLE001
+        return False, f"Could not save config.yaml: {exc}"
+    what = "Packet capture is on" if enabled else "Packet capture is off"
+    if restart and podman().mode != "none":
+        result = podman().restart(s.shell.container)
+        if result.ok:
+            return True, f"{what}, and the server is restarting."
+        return True, f"{what} in config.yaml, but the restart failed: {result.error}"
+    return True, f"{what} in config.yaml; restart the server for it to take effect."
 
 
 @dashboard.route("/diagnostics/capture", methods=["POST"])

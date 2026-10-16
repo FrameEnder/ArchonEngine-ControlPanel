@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.12.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.13.0.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -256,6 +256,12 @@ test.
   branch — one already done, else the quest's own city — so a Gridania tester
   doesn't get Limsa's and Ul'dah's story too. Quest completion is Kawari's
   most-significant-bit-first quest bitmask.
+* **Test this quest.** One test session from setup to bundle: **Start the test** sets up the character as
+  above, turns packet capture on (restarting the server if you tick it, since the server only reads that at
+  startup) and notes the time. Play the quest, then **Finish the test and send it**: a diagnostics bundle
+  covering exactly the test, with the quest in its `meta.json` (`quest_test`) and README, so the fork's
+  `questkit triage` follows that quest and `questkit compare` knows what to check. It can turn capture back
+  off if the test turned it on. **Cancel** sends nothing. One test runs at a time; Diagnostics shows it too.
 * **Bundle.** One zip of the selected dumps, the scripts the server runs for
   them, `Global.lua`, optionally the index, and a `MANIFEST.md` of the checks:
   the attachment for whoever writes the next quests. Dumps are Square Enix's
