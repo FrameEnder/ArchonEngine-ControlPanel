@@ -3,6 +3,9 @@
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
 FFXIV server, built to run in a rootless Podman container. Version 2.12.0.
 
+How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
+`docs/src/fork/kawari-web.md`; that page is updated with every change here.
+
 It shares its logic with the desktop manager: `kawari_core/` is the same
 database, Auracite, schema and version code, with the Qt dependency removed.
 
