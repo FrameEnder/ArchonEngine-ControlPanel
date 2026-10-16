@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit ' ~ listing.name if listing.id else 'New listing' }} · Shop · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<p class="crumbs small"><a href="{{ url_for('shop.browse') }}">Shop</a>
+  {% if listing.category %}› <a href="{{ url_for('shop.browse', category=listing.category) }}">{{ listing.category }}</a>{% endif %}
+  {% if listing.id %}› <a href="{{ url_for('shop.item', listing_id=listing.id) }}">{{ listing.name }}</a>{% endif %}</p>
+<h1>{{ 'Edit listing' if listing.id else 'New listing' }}</h1>
+
+<div class="shop-split shop-edit">
+<form method="post" class="card" action="{{ url_for('shop.edit', listing_id=listing.id) if listing.id else url_for('shop.new') }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <div class="field"><label for="name">Name</label><input id="name" name="name" value="{{ listing.name }}" required></div>
+  <div class="field"><label for="category">Category</label>
+    <select id="category" name="category">
+      {% for name, n in categories %}<option {{ 'selected' if name == listing.category }}>{{ name }}</option>{% endfor %}
+    </select>
+    <p class="hint">or a new one: <input name="new_category" placeholder="New category" class="inline-input"></p></div>
+  <div class="field"><label for="description">Description</label>
+    <textarea id="description" name="description" rows="3">{{ listing.description }}</textarea></div>
+  <div class="field"><label for="contents">Contents</label>
+    <textarea id="contents" name="contents" rows="6" class="mono" placeholder="3 x Fantasia">{{ contents_text }}</textarea>
+    <p class="hint">One item per line, as the game names it: “Fantasia”, “3 x Fantasia”. Several items with the
+       same name? Add the one you mean's ID: “Ballroom Etiquette - Improper Praise #40359”.</p></div>
+  <div class="field"><label for="price_gil">Price in gil</label>
+    <input id="price_gil" name="price_gil" type="number" min="0" value="{{ listing.price_gil }}">
+    <p class="hint"><label class="inline"><input type="checkbox" name="sell_gil" {{ 'checked' if listing.sell_gil }}> Sell for gil</label></p></div>
+  <div class="field"><label for="price_coins">Price in {{ coin_name }}</label>
+    <input id="price_coins" name="price_coins" type="number" min="0" value="{{ listing.price_coins }}">
+    <p class="hint"><label class="inline"><input type="checkbox" name="sell_coins" {{ 'checked' if listing.sell_coins }}> Sell for {{ coin_name }}</label></p></div>
+  <div class="field"><label for="retail_price">Retail price</label>
+    <input id="retail_price" name="retail_price" value="{{ listing.retail_price }}">
+    <p class="hint">For reference only (what the official store charges).</p></div>
+  <div class="field"><label for="patch">Patch</label><input id="patch" name="patch" value="{{ listing.patch }}"></div>
+  <div class="field"><label for="notes">Notes</label><textarea id="notes" name="notes" rows="2">{{ listing.notes }}</textarea></div>
+  <div class="field"><span></span><label class="inline"><input type="checkbox" name="visible" {{ 'checked' if listing.visible }}> Shown in the shop</label></div>
+  <button class="btn accent">{{ 'Save' if listing.id else 'Add listing' }}</button>
+</form>
+
+<div>
+  {% if listing.id %}
+  <section class="card">
+    <h2>Linked items</h2>
+    {% if not index_ready %}
+      <p class="warn-inline">The item list hasn't been read from the game yet. <a href="{{ url_for('shop.manage') }}">Read it</a> to check these.</p>
+    {% elif listing.linked %}
+      <ul class="plainlist">
+      {% for e in listing.linked %}
+        <li>{% if e.item %}<span class="dot ok"></span>{{ e.qty }} × {{ e.item.name }} <span class="dim small mono">#{{ e.item.id }}</span>
+            {% else %}<span class="dot err"></span>{{ e.qty }} × {{ e.name }} <div class="warn-inline small">{{ e.problem }}</div>{% endif %}</li>
+      {% endfor %}
+      </ul>
+    {% else %}<p class="dim">No contents yet.</p>{% endif %}
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <h2>Find a game item</h2>
+    <form method="get" class="shop-search">
+      <input type="search" name="find" value="{{ find }}" placeholder="Part of an item's name">
+      <button class="btn">Find</button>
+    </form>
+    {% if search %}
+    <table class="grid small">
+      <tr><th>ID</th><th>Name</th><th>Category</th></tr>
+      {% for i in search %}<tr><td class="mono">{{ i.id }}</td><td>{{ i.name }}</td><td class="dim">{{ i.category }}</td></tr>{% endfor %}
+    </table>
+    {% elif find %}<p class="dim">Nothing matches.</p>{% endif %}
+  </section>
+
+  {% if listing.id %}
+  <form method="post" action="{{ url_for('shop.delete', listing_id=listing.id) }}" class="card"
+        onsubmit="return confirm('Delete {{ listing.name|e }}?')">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <h2>Delete</h2>
+    <p class="dim small">Takes the listing out of the shop for good. Past purchases stay in the history.</p>
+    <button class="btn">Delete listing</button>
+  </form>
+  {% endif %}
+</div>
+</div>
+{% endblock %}

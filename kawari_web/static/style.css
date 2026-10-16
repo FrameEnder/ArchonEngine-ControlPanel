@@ -623,3 +623,70 @@ a.plain:hover .meter-head span:first-child { text-decoration: underline; }
 @media (max-width: 640px) {
     .progress-table .wide-only { display: none; }
 }
+
+/* ── shop ───────────────────────────────────────────────────────────── */
+.wallet-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem 2rem; }
+.wallet-bar p { margin: 0; }
+.wallet-pick { margin: 0; }
+.wallet-pick label { margin: 0; }
+.wallet-pick select { min-width: 200px; }
+.wallet-figure { display: flex; flex-direction: column; line-height: 1.25; }
+.wallet-figure b { font-size: 1.2rem; }
+.wallet-links { margin-left: auto; display: flex; gap: 1rem; flex-wrap: wrap; }
+.warn-pill { color: var(--warn); border-color: var(--warn); }
+
+.shop-layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 1.2rem; align-items: start; }
+.shop-cats { display: flex; flex-direction: column; gap: .15rem; position: sticky; top: 76px; }
+.shop-cats a { display: flex; justify-content: space-between; gap: .5rem; padding: .45rem .7rem; border-radius: 8px; color: var(--dim); }
+.shop-cats a:hover { background: var(--surface-alt); color: var(--text); text-decoration: none; }
+.shop-cats a.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); font-weight: 600; }
+.shop-search { display: flex; gap: .5rem; margin-bottom: .4rem; }
+.shop-search input { margin-top: 0; }
+input[type=search] {
+    display: block; width: 100%; padding: .5rem .7rem; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; font: inherit;
+}
+
+.shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .8rem; }
+.shop-card {
+    display: flex; flex-direction: column; gap: .35rem; min-width: 0;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: .85rem .95rem; color: var(--text);
+}
+.shop-card:hover { border-color: var(--accent); text-decoration: none; }
+.shop-card.is-hidden { opacity: .6; }
+.shop-card-head { display: flex; justify-content: space-between; gap: .5rem; align-items: start; }
+.shop-card h3 { font-size: .98rem; line-height: 1.3; }
+.shop-card p { margin: 0; }
+.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.price-row { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: auto; padding-top: .3rem; }
+.price-chip { font-size: .8rem; font-weight: 600; padding: .12rem .55rem; border-radius: 999px; border: 1px solid var(--border-strong); white-space: nowrap; }
+.price-chip.gil { color: #d9b44a; border-color: color-mix(in srgb, #d9b44a 55%, transparent); }
+.price-chip.coin { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.shop-card-foot { min-height: 1.2em; }
+.pager { display: flex; gap: .8rem; align-items: center; justify-content: center; margin-top: 1rem; }
+
+.crumbs { margin: 0 0 .3rem; color: var(--dim); }
+.item-head { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
+.item-head h1 { margin: 0 0 .6rem; }
+.shop-split { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 1.1rem; align-items: start; }
+.shop-split > .card { margin-bottom: 0; }
+.shop-edit.shop-split { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+.buy-card form { margin: 0 0 .8rem; }
+.buy-btn { width: 100%; text-align: center; padding: .7rem 1rem; }
+ul.plainlist { list-style: none; padding: 0; margin: .3rem 0; }
+ul.plainlist li { padding: .2rem 0; }
+ul.cols-list { columns: 3 220px; }
+.narrow-input { max-width: 140px; display: inline-block; }
+.inline-input { display: inline-block; max-width: 240px; margin-top: .2rem; }
+.inline-row { display: flex; gap: .5rem; align-items: center; }
+.inline-row input { margin-top: 0; }
+form.inline input { margin-top: 0; width: auto; }
+
+@media (max-width: 760px) {
+    .shop-layout { grid-template-columns: 1fr; }
+    .shop-cats { position: static; flex-direction: row; overflow-x: auto; padding-bottom: .3rem; }
+    .shop-cats a { white-space: nowrap; }
+    .shop-split, .shop-edit.shop-split { grid-template-columns: 1fr; }
+    .wallet-links { margin-left: 0; }
+}

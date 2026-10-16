@@ -30,6 +30,8 @@ def create_app(settings: Settings | None = None) -> Flask:
     settings = settings or Settings.from_env()
     settings.ensure_dirs()
     webdb.init(settings.webapp_db)
+    from kawari_core import shop as shop_core
+    shop_core.init(settings.webapp_db)
     # Which Kawari repository this installation tracks. Process-wide state, so
     # it has to be set before anything reads upstream - including the build
     # adoption that BuildStore does on first use.
@@ -47,9 +49,11 @@ def create_app(settings: Settings | None = None) -> Flask:
     # Importing these registers their routes on the shared blueprint.
     from . import admin_base, dashboard as _core, admin_setup, admin_updates, admin_character, questlab, progress, diagnostics  # noqa: F401
     from .social import social
+    from .shop import shop
     from .syncapi import api
     app.register_blueprint(main)
     app.register_blueprint(social)
+    app.register_blueprint(shop)
     app.register_blueprint(api)
     app.register_blueprint(admin_base.dashboard, url_prefix="/dashboard")
 

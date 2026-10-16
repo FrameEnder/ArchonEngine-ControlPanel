@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Your purchases · Shop · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<p class="crumbs small"><a href="{{ url_for('shop.browse') }}">Shop</a></p>
+<h1>Your purchases</h1>
+{% include "shop/_wallet.html" %}
+<section class="card">
+  {% if purchases %}
+  <table class="grid">
+    <tr><th>When</th><th>Listing</th><th>Delivered to</th><th>Paid</th></tr>
+    {% for p in purchases %}
+    <tr>
+      <td class="small mono">{{ p.created_at }}</td>
+      <td><a href="{{ url_for('shop.item', listing_id=p.listing_id) }}">{{ p.listing }}</a></td>
+      <td>{{ p.character }}</td>
+      <td>{{ '{:,}'.format(p.price) }} {{ 'gil' if p.currency == 'gil' else coin_name }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="dim">Nothing bought yet.</p>{% endif %}
+</section>
+{% endblock %}

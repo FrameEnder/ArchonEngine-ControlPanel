@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Shop · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Shop</h1>
+{% include "shop/_wallet.html" %}
+
+<div class="shop-layout">
+  <nav class="shop-cats" aria-label="Categories">
+    {% for name, n in categories %}
+    <a href="{{ url_for('shop.browse', category=name) }}" class="{{ 'on' if name == category and not query }}">
+      <span>{{ name }}</span><span class="dim small">{{ n }}</span></a>
+    {% endfor %}
+  </nav>
+
+  <div class="shop-main">
+    <form method="get" action="{{ url_for('shop.browse') }}" class="shop-search">
+      <input type="search" name="q" value="{{ query }}" placeholder="Search every listing" aria-label="Search">
+      <button class="btn">Search</button>
+    </form>
+    <p class="dim small">
+      {% if query %}{{ count }} listing{{ '' if count == 1 else 's' }} matching “{{ query }}”
+      {% else %}{{ category }} · {{ count }} listing{{ '' if count == 1 else 's' }}{% endif %}
+      {% if user and user.is_admin and not index_ready %} · <span class="warn-inline">listings aren't linked to game items yet:
+        <a href="{{ url_for('shop.manage') }}">read the item list</a></span>{% endif %}
+    </p>
+
+    <div class="shop-grid">
+      {% for l in listings %}
+      <a class="shop-card {{ 'is-hidden' if not l.visible }}" href="{{ url_for('shop.item', listing_id=l.id) }}">
+        <div class="shop-card-head">
+          <h3>{{ l.name }}</h3>
+          {% if not l.visible %}<span class="pill small">hidden</span>{% endif %}
+        </div>
+        {% if query %}<span class="dim small">{{ l.category }}</span>{% endif %}
+        <p class="dim small clamp">{{ l.description }}</p>
+        <div class="price-row">
+          {% if cfg.shop_gil_enabled == '1' and l.sell_gil %}<span class="price-chip gil">{{ '{:,}'.format(l.price_gil) }} gil</span>{% endif %}
+          {% if cfg.shop_coins_enabled == '1' and l.sell_coins %}<span class="price-chip coin">{{ '{:,}'.format(l.price_coins) }} {{ coin_name }}</span>{% endif %}
+        </div>
+        <div class="shop-card-foot small">
+          {% if not l.ready %}<span class="warn-inline">{{ 'Contents not set' if not l.contents else 'Not linked to game items' }}</span>
+          {% elif cfg.shop_show_retail == '1' and l.retail_price %}<span class="dim">Retail {{ l.retail_price }}</span>{% endif %}
+        </div>
+      </a>
+      {% else %}
+      <div class="card"><p class="dim">Nothing here.</p></div>
+      {% endfor %}
+    </div>
+
+    {% if pages > 1 %}
+    <nav class="pager">
+      {% if page > 1 %}<a class="btn small" href="{{ url_for('shop.browse', category=category, q=query, page=page - 1) }}">Previous</a>{% endif %}
+      <span class="dim small">Page {{ page }} of {{ pages }}</span>
+      {% if page < pages %}<a class="btn small" href="{{ url_for('shop.browse', category=category, q=query, page=page + 1) }}">Next</a>{% endif %}
+    </nav>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

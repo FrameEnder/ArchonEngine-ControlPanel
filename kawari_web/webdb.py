@@ -96,6 +96,7 @@ NOTIFICATION_KINDS = [
     ("reply", "Replies to my comments"),
     ("server", "Server starts and stops"),
     ("announcement", "Announcements from administrators"),
+    ("shop", "Shop deliveries"),
 ]
 
 POST_MAX = 2000

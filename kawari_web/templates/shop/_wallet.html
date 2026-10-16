@@ -1,0 +1,41 @@
+{# The buyer's character, gil and coins, on every shop page. #}
+<section class="card wallet-bar">
+  {% if user %}
+    {% if characters %}
+    <form method="post" action="{{ url_for('shop.pick_character') }}" class="wallet-pick">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="back" value="{{ request.full_path }}">
+      <label>Deliver to
+        <select name="content_id" data-autosubmit>
+          {% for ch in characters %}
+          <option value="{{ ch.content_id }}" {{ 'selected' if selected and ch.content_id == selected.content_id }}>{{ ch.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <noscript><button class="btn small">Choose</button></noscript>
+    </form>
+    <div class="wallet-figure">
+      <span class="dim small">Gil</span>
+      <b>{{ '{:,}'.format(gil) if gil is not none else '—' }}</b>
+      {% if online %}<span class="pill small warn-pill" title="Gil can only be spent while this character is logged out">logged in</span>{% endif %}
+    </div>
+    {% else %}
+    <p class="dim">You have no characters yet. Make one in the game to have purchases delivered.</p>
+    {% endif %}
+    <div class="wallet-figure">
+      <span class="dim small">{{ coin_name }}</span>
+      <b>{{ '{:,}'.format(wallet.balance) if wallet else 0 }}</b>
+      <span class="dim small">+{{ cfg.shop_coins_per_hour }} per hour played</span>
+    </div>
+    <div class="wallet-links">
+      <a href="{{ url_for('shop.history') }}">Your purchases</a>
+      {% if user.is_admin %}
+        <a href="{{ url_for('shop.new', category=category if category is defined else '') }}">Add a listing</a>
+        <a href="{{ url_for('shop.manage') }}">Manage the shop</a>
+      {% endif %}
+    </div>
+  {% else %}
+    <p class="dim"><a href="{{ url_for('main.login', next=request.path) }}">Sign in</a> to buy: purchases
+       go to one of your characters by moogle mail, paid in gil or {{ coin_name }} (earned by playing).</p>
+  {% endif %}
+</section>

@@ -23,6 +23,7 @@
   <nav class="mainnav">
     <a href="{{ url_for('main.home') }}" class="{{ 'on' if request.endpoint == 'main.home' }}">Home</a>
     <a href="{{ url_for('social.feed') }}" class="{{ 'on' if request.blueprint == 'social' and 'post' in (request.endpoint or '') or request.endpoint == 'social.feed' }}">Feed</a>
+    <a href="{{ url_for('shop.browse') }}" class="{{ 'on' if request.blueprint == 'shop' }}">Shop</a>
     <a href="{{ url_for('main.connect') }}" class="{{ 'on' if request.endpoint == 'main.connect' }}">How to Connect</a>
   </nav>
 

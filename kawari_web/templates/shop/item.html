@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{{ listing.name }} · Shop · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<p class="crumbs small"><a href="{{ url_for('shop.browse') }}">Shop</a> ›
+  <a href="{{ url_for('shop.browse', category=listing.category) }}">{{ listing.category }}</a></p>
+<div class="item-head">
+  <h1>{{ listing.name }}</h1>
+  {% if user and user.is_admin %}<a class="btn small" href="{{ url_for('shop.edit', listing_id=listing.id) }}">Edit</a>{% endif %}
+  {% if not listing.visible %}<span class="pill small">hidden</span>{% endif %}
+</div>
+{% include "shop/_wallet.html" %}
+
+<div class="shop-split shop-item">
+  <section class="card">
+    <h2>What you get</h2>
+    {% if listing.description %}<p>{{ listing.description }}</p>{% endif %}
+    {% if listing.linked %}
+    <table class="grid">
+      <tr><th>Qty</th><th>Item</th><th>In game</th></tr>
+      {% for e in listing.linked %}
+      <tr>
+        <td class="mono">{{ e.qty }}</td>
+        <td>{{ e.item.name if e.item else e.name }}</td>
+        <td class="small">
+          {% if e.item %}<span class="dim">{{ e.item.category }}{% if user and user.is_admin %} · #{{ e.item.id }}{% endif %}</span>
+            {% if e.item.description %}<div class="dim">{{ e.item.description }}</div>{% endif %}
+          {% else %}<span class="warn-inline">{{ e.problem }}</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p class="warn-inline">What this listing contains hasn't been set yet.</p>
+    {% endif %}
+    {% if listing.notes %}<p class="dim small">{{ listing.notes }}</p>{% endif %}
+    <dl class="kv small">
+      {% if cfg.shop_show_retail == '1' and listing.retail_price %}<dt>Retail price</dt><dd>{{ listing.retail_price }}</dd>{% endif %}
+      {% if listing.patch %}<dt>Added in patch</dt><dd>{{ listing.patch }}</dd>{% endif %}
+    </dl>
+  </section>
+
+  <section class="card buy-card">
+    <h2>Buy</h2>
+    {% set can_gil = cfg.shop_gil_enabled == '1' and listing.sell_gil %}
+    {% set can_coins = cfg.shop_coins_enabled == '1' and listing.sell_coins %}
+    {% if not user %}
+      <p><a class="btn accent" href="{{ url_for('main.login', next=request.path) }}">Sign in to buy</a></p>
+    {% elif not selected %}
+      <p class="dim">You need a character to deliver to.</p>
+    {% elif not listing.ready %}
+      <p class="warn-inline">This can't be bought until {{ 'its contents are set' if not listing.contents else 'its contents are linked to game items' }}.</p>
+    {% else %}
+      <p class="dim small">Delivered to <b>{{ selected.name }}</b> by moogle mail: take it from any mailbox in game.</p>
+      {% if can_gil %}
+      <form method="post" action="{{ url_for('shop.buy', listing_id=listing.id) }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <input type="hidden" name="currency" value="gil">
+        <button class="btn buy-btn" {{ 'disabled' if online or (gil or 0) < listing.price_gil }}>
+          Buy for <b>{{ '{:,}'.format(listing.price_gil) }} gil</b></button>
+        {% if online %}<p class="dim small">{{ selected.name }} is logged in: log out to pay with gil.</p>
+        {% elif (gil or 0) < listing.price_gil %}<p class="dim small">{{ selected.name }} has {{ '{:,}'.format(gil or 0) }} gil.</p>{% endif %}
+      </form>
+      {% endif %}
+      {% if can_coins %}
+      <form method="post" action="{{ url_for('shop.buy', listing_id=listing.id) }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <input type="hidden" name="currency" value="coins">
+        <button class="btn accent buy-btn" {{ 'disabled' if wallet.balance < listing.price_coins }}>
+          Buy for <b>{{ '{:,}'.format(listing.price_coins) }} {{ coin_name }}</b></button>
+        {% if wallet.balance < listing.price_coins %}<p class="dim small">You have {{ '{:,}'.format(wallet.balance) }}.</p>{% endif %}
+      </form>
+      {% endif %}
+      {% if not can_gil and not can_coins %}<p class="dim">This isn't for sale right now.</p>{% endif %}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

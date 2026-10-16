@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Manage the shop · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<p class="crumbs small"><a href="{{ url_for('shop.browse') }}">Shop</a></p>
+<h1>Manage the shop</h1>
+
+<div class="cols">
+<form method="post" class="card">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <input type="hidden" name="action" value="settings">
+  <h2>Currencies</h2>
+  <label>Name of the play currency<input name="shop_coin_name" value="{{ cfg.shop_coin_name }}"></label>
+  <label>Earned per hour of playtime<input name="shop_coins_per_hour" type="number" min="0" value="{{ cfg.shop_coins_per_hour }}"></label>
+  <p class="dim small">Every character on an account counts. Playtime is saved with each autosave, so it adds up while
+     people play. A change of rate counts from now on; nothing already earned changes.</p>
+  <label class="inline"><input type="checkbox" name="shop_count_past_playtime" {{ 'checked' if cfg.shop_count_past_playtime == '1' }}>
+    Pay for playtime from before an account's first visit to the shop</label>
+  <label class="inline"><input type="checkbox" name="shop_coins_enabled" {{ 'checked' if cfg.shop_coins_enabled == '1' }}> Sell for {{ coin_name }}</label>
+  <label class="inline"><input type="checkbox" name="shop_gil_enabled" {{ 'checked' if cfg.shop_gil_enabled == '1' }}> Sell for gil</label>
+  <label class="inline"><input type="checkbox" name="shop_show_retail" {{ 'checked' if cfg.shop_show_retail == '1' }}> Show retail prices</label>
+  <label>Letter that comes with a purchase<input name="shop_letter" value="{{ cfg.shop_letter }}"></label>
+  <p class="dim small">{site} is the site's name, {listing} the listing's.</p>
+  <button class="btn accent">Save</button>
+</form>
+
+<form method="post" class="card">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <input type="hidden" name="action" value="prices">
+  <h2>Set prices in bulk</h2>
+  <label>Category
+    <select name="category"><option value="">Every listing</option>
+      {% for name, n in categories %}<option>{{ name }}</option>{% endfor %}</select></label>
+  <label>Gil price<input name="price_gil" type="number" min="0" placeholder="Leave empty to keep"></label>
+  <label>{{ coin_name }} price<input name="price_coins" type="number" min="0" placeholder="Leave empty to keep"></label>
+  <button class="btn">Apply</button>
+</form>
+</div>
+
+<section class="card">
+  <h2>Game items</h2>
+  <p class="dim">Listings deliver real game items, linked by name to the item list from your game install
+     (kawari-questdump's <span class="mono">items</span> command). Read it again after a game update.</p>
+  {% if index %}
+    <p><b>{{ '{:,}'.format(index.items|length) }}</b> items in the list. <b>{{ report.ready }}</b> of {{ report.total }} listings can be delivered.</p>
+  {% else %}
+    <p class="warn-inline">The item list hasn't been read yet, so nothing can be bought.</p>
+  {% endif %}
+  <form method="post" class="rowactions">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="action" value="index">
+    <button class="btn accent" {{ 'disabled' if not (tool.ok and tool.has_items_cmd) }}>Read the item list from the game</button>
+  </form>
+  {% if not tool.ok %}<p class="line err">{{ tool.reason }}</p>
+  {% elif not tool.has_items_cmd %}<p class="line err">The active build's kawari-questdump has no items command yet: build the fork again.</p>{% endif %}
+
+  {% if index and report.problems %}
+  <details class="drop"><summary>{{ report.problems|length }} listing(s) with items the game doesn't know</summary>
+    <table class="grid small">
+      {% for l in report.problems[:200] %}
+      <tr><td><a href="{{ url_for('shop.edit', listing_id=l.id) }}">{{ l.name }}</a><div class="dim">{{ l.category }}</div></td>
+          <td>{% for e in l.problems %}<div class="warn-inline">{{ e.problem }}</div>{% endfor %}</td></tr>
+      {% endfor %}
+    </table>
+  </details>
+  {% endif %}
+  {% if report.empty %}
+  <details class="drop"><summary>{{ report.empty|length }} listing(s) with no contents yet</summary>
+    <p class="dim small">The catalogue these came from didn't say what's in them. Add the pieces to sell them.</p>
+    <ul class="plainlist cols-list">
+      {% for l in report.empty %}<li><a href="{{ url_for('shop.edit', listing_id=l.id) }}">{{ l.name }}</a></li>{% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>{{ coin_name }} balances</h2>
+  <table class="grid">
+    <tr><th>Account</th><th>Balance</th><th>Earned in total</th><th>Adjust</th></tr>
+    {% for p in profiles %}
+    {% set w = wallets.get(p.user_id) %}
+    <tr>
+      <td>{{ p.display_name or p.username }} <span class="dim small">@{{ p.username }}</span></td>
+      <td class="mono">{{ '{:,}'.format(w.balance) if w else '—' }}</td>
+      <td class="mono dim">{{ '{:,}'.format(w.earned_total) if w else '—' }}</td>
+      <td>
+        <form method="post" class="inline">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}">
+          <input type="hidden" name="action" value="coins">
+          <input type="hidden" name="user_id" value="{{ p.user_id }}">
+          <input name="amount" type="number" placeholder="+100 or -50" class="narrow-input" required>
+          <input name="reason" placeholder="Reason (optional)">
+          <button class="btn small">Apply</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p class="dim small">A balance appears once the account opens the shop. Adjusting it opens it now.</p>
+</section>
+
+<section class="card">
+  <h2>Recent purchases</h2>
+  {% if recent %}
+  <table class="grid small">
+    <tr><th>When</th><th>Listing</th><th>Character</th><th>Paid</th></tr>
+    {% for p in recent %}
+    <tr><td class="mono">{{ p.created_at }}</td><td>{{ p.listing }}</td><td>{{ p.character }}</td>
+        <td>{{ '{:,}'.format(p.price) }} {{ 'gil' if p.currency == 'gil' else coin_name }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="dim">None yet.</p>{% endif %}
+</section>
+
+<form method="post" class="card warn">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <input type="hidden" name="action" value="reseed">
+  <h2>Start over</h2>
+  <p class="dim">Replaces every listing with the original catalogue, prices back to 1. Edits and added listings are lost;
+     balances and purchase history stay. Type RESET to confirm.</p>
+  <div class="inline-row"><input name="confirm" class="narrow-input" placeholder="RESET"> <button class="btn">Reset the listings</button></div>
+</form>
+{% endblock %}

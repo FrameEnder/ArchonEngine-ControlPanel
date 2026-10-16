@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.11.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.12.0.
 
 It shares its logic with the desktop manager: `kawari_core/` is the same
 database, Auracite, schema and version code, with the Qt dependency removed.
@@ -175,6 +175,11 @@ posts and comments; deleting a comment removes its replies with it.
 Administrators can remove anyone's. Every profile shows that player's posts; the
 Feed page shows everyone's.
 
+**Shop** — the FINAL FANTASY XIV Online Store's catalogue (829 listings in 16
+categories: mounts, minions, emotes, Tales of Adventure, Fantasia, outfits, gear,
+dyes, barding, orchestrion rolls, housing...), for everyone to browse and search,
+and to buy with **gil** or the site's own **play coins**. See [Shop](#shop).
+
 **Notifications** — a bell in the top bar with an unread badge and a dropdown.
 Delivered for comments on your posts, replies to your comments, the game server
 starting or stopping, and administrator announcements. Turning a kind off in
@@ -279,6 +284,39 @@ every quest from A Realm Reborn to Dawntrail, against the quest scripts in the
 The index needs a fork build whose `kawari-questdump` writes format 2 (main
 scenario flag, expansion and journal section). With an older index the page still
 works, but says so and counts every quest as a side quest.
+
+## Shop
+
+The **Shop** tab sells the Online Store's catalogue on your server. It's seeded
+from `kawari_core/data/shop_seed.json` (gathered from the Console Games Wiki,
+Square Enix's Tales of Adventure guide and Eorzean Tavern; the retail price is
+kept for reference) and lives in the web app's own database from then on.
+
+* **Two prices per listing**, 1 by default:
+  * **Gil** comes out of the character the buyer picks at the top of the shop.
+    The world server keeps a logged-in character in memory and saves it over any
+    change, so gil can only be spent while that character is logged out.
+  * **Play coins** belong to the web account. They're earned from playtime, every
+    character on the account counting, at 25 an hour by default. The fork's
+    server saves playtime with every autosave, so coins add up while people play.
+* **Delivery** is how retail delivers store purchases: a reward letter by moogle
+  mail, from the World, with the items attached (five to a letter). Take them from
+  any mailbox in game. This works for a logged-in character too, because the
+  server reads mail when the mailbox opens.
+* **Linked to game items.** A listing's contents are game items by name and
+  quantity. **Manage the shop → Read the item list from the game** runs
+  `kawari-questdump items` (a fork build's), which writes every item's ID, name
+  and description from your game install; contents are matched against it. A
+  listing whose items the game doesn't know, or with several items of the same
+  name, can't be bought until it's fixed: give the right one's ID (`Name #12345`).
+  162 costume sets came without their pieces listed; those need contents first.
+* **Administrators** edit any listing (name, category, description, contents,
+  both prices, whether each currency is accepted, hidden or shown), add and delete
+  listings, set prices for a whole category at once, rename the play currency,
+  change its rate, adjust anyone's balance, change the letter that comes with a
+  purchase, and can reset the listings to the original catalogue.
+* Buyers get a notification when an order is delivered, and **Your purchases**
+  lists their orders.
 
 ## Diagnostics
 
@@ -520,10 +558,10 @@ is now the complete one.
 
 ```
 kawari_core/     shared, Qt-free: dbtools, chardata, auracite, schemagen,
-                 versions, upstream, questlab, progress, gamedata,
+                 versions, upstream, questlab, progress, shop, gamedata,
                  constants, core
 kawari_web/      Flask app: config, webdb, auth, podman_api, stats, app,
-                 dashboard, upstreamcfg, srcbuild, questlab, progress,
+                 dashboard, upstreamcfg, srcbuild, questlab, progress, shop,
                  templates/, static/
 Containerfile    rootless-friendly image, runs as a non-root user
 run.sh           build + run with the right mounts

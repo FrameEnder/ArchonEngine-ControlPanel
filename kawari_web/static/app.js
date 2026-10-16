@@ -173,3 +173,8 @@ document.addEventListener("change", (event) => {
   form.querySelectorAll(`input[type=checkbox][name="${box.dataset.checkAll}"]`)
       .forEach((input) => { input.checked = box.checked; });
 });
+
+// Shop: picking a character submits straight away.
+document.querySelectorAll("select[data-autosubmit]").forEach((select) => {
+    select.addEventListener("change", () => select.form.submit());
+});
