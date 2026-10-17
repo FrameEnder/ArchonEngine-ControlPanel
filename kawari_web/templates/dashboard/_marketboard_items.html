@@ -1,0 +1,28 @@
+{# The items table both marketboard pages use: rows from kawari_web.marketboard._rows. #}
+<form method="post" action="{{ url_for('dashboard.marketboard') }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <input type="hidden" name="action" value="items">
+  <input type="hidden" name="back" value="{{ request.full_path }}">
+  <table class="grid small">
+    <tr><th>Item</th>{% if show_category %}<th>Category</th>{% endif %}<th>Level</th><th>Rarity</th>
+        <th>NQ price</th><th>HQ price</th><th>Sold</th></tr>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.item.name }} <span class="dim mono">#{{ r.item.id }}</span></td>
+      {% if show_category %}<td><a href="{{ url_for('dashboard.marketboard_category', category_id=r.category.id) }}">{{ r.category.name }}</a>
+          <div class="dim">{{ M.TABS[r.category.tab] }}</div></td>{% endif %}
+      <td class="mono">{{ r.level }}</td>
+      <td><span class="rarity rarity-{{ r.rarity }}">{{ r.rarity }}</span></td>
+      <td><input class="price" name="nq_{{ r.item.id }}" inputmode="numeric" value="{{ r.own_nq if r.own_nq is not none else '' }}"
+                 placeholder="{{ '{:,}'.format(r.computed_nq) }}"></td>
+      <td>{% if r.item.can_be_hq %}<input class="price" name="hq_{{ r.item.id }}" inputmode="numeric"
+                 value="{{ r.own_hq if r.own_hq is not none else '' }}" placeholder="{{ '{:,}'.format(r.computed_hq) }}">
+          {% else %}<span class="dim">no HQ</span><input type="hidden" name="hq_{{ r.item.id }}" value="{{ r.own_hq if r.own_hq is not none else '' }}">{% endif %}</td>
+      <td class="mono">{{ r.sold or '' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p class="dim small">Empty boxes use the computed price (shown greyed). Type a price to fix it for that item; clear it
+     to go back to the computed one.</p>
+  <button class="btn accent">Save these prices</button>
+</form>

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{{ cat.name }} · Marketboard · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+{% include "dashboard/_nav.html" %}
+<p class="crumbs small"><a href="{{ url_for('dashboard.marketboard') }}">Marketboard</a> › {{ M.TABS[cat.tab] }} › {{ cat.name }}</p>
+
+<section class="card">
+  <h2>{{ cat.name }}</h2>
+  <p class="dim">{{ cat.items|length }} items. Rates left empty use the {{ M.TABS[cat.tab] }} tab's (shown greyed).
+     Right now: <b>{{ '{:,}'.format(rates.per_level) }}</b> gil per {{ M.LEVEL_SOURCES[rates.level_source]|lower }},
+     bonuses {% for r in M.RARITIES %}<span class="rarity rarity-{{ r }}">{{ '{:,}'.format(rates.rarity[loop.index0]) }}</span>{{ ', ' if not loop.last }}{% endfor %},
+     HQ × {{ rates.hq_multiplier }}.</p>
+  <form method="post" action="{{ url_for('dashboard.marketboard') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="action" value="category">
+    <input type="hidden" name="category" value="{{ cat.id }}">
+    <input type="hidden" name="back" value="{{ request.full_path }}">
+    <div class="rates">
+      <label>Gil per level<input name="per_level" inputmode="numeric" value="{{ changes.per_level if changes.per_level is not none else '' }}" placeholder="{{ tab_rates.per_level }}"></label>
+      <label>Level
+        <select name="level_source">
+          <option value="">The tab's ({{ M.LEVEL_SOURCES[tab_rates.level_source] }})</option>
+          {% for key, label in M.LEVEL_SOURCES.items() %}
+          <option value="{{ key }}" {{ 'selected' if changes.level_source == key }}>{{ label }}</option>{% endfor %}
+        </select></label>
+      {% for r in M.RARITIES %}
+      <label><span class="rarity rarity-{{ r }}">{{ r }}</span> bonus
+        <input name="rarity_{{ r }}" inputmode="numeric" value="{{ changes.rarity[loop.index0] if changes.rarity and changes.rarity[loop.index0] is not none else '' }}"
+               placeholder="{{ tab_rates.rarity[loop.index0] }}"></label>
+      {% endfor %}
+      <label>HQ × bonus<input name="hq_multiplier" inputmode="numeric" value="{{ changes.hq_multiplier if changes.hq_multiplier is not none else '' }}" placeholder="{{ tab_rates.hq_multiplier }}"></label>
+    </div>
+    <div class="rowactions">
+      <button class="btn accent">Save category rates</button>
+      <button class="btn" name="action" value="category_reset">Use the tab's rates</button>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Items{% if pages > 1 %} <span class="dim small">page {{ page }} of {{ pages }}</span>{% endif %}</h2>
+  {% with show_category=False %}{% include "dashboard/_marketboard_items.html" %}{% endwith %}
+  {% if pages > 1 %}
+  <p class="rowactions">
+    {% if page > 1 %}<a class="btn" href="{{ url_for('dashboard.marketboard_category', category_id=cat.id, page=page - 1) }}">‹ Previous</a>{% endif %}
+    {% if page < pages %}<a class="btn" href="{{ url_for('dashboard.marketboard_category', category_id=cat.id, page=page + 1) }}">Next ›</a>{% endif %}
+  </p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -690,3 +690,13 @@ form.inline input { margin-top: 0; width: auto; }
     .shop-split, .shop-edit.shop-split { grid-template-columns: 1fr; }
     .wallet-links { margin-left: 0; }
 }
+
+/* Dashboard -> Marketboard */
+.rates { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: .25rem .75rem; }
+input.price { width: 7.5rem; font-variant-numeric: tabular-nums; }
+.rarity { font-weight: 600; text-transform: capitalize; }
+.rarity-white { color: var(--text); }
+.rarity-pink { color: #e78fc4; }
+.rarity-green { color: #58b368; }
+.rarity-blue { color: #5b9be6; }
+.rarity-purple { color: #b07ce8; }

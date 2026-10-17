@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.14.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.15.0.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -214,7 +214,7 @@ collections as progress bars, and other stats.
 **Dashboard** (administrators only) — server start/stop/restart, service and
 client-version checks, the full `config.yaml` editor, database health and
 migration, backups, account creation and admin promotion, Auracite import and
-export, branding, quest progress, and container logs. Non-admins get a 403 on every dashboard
+export, branding, quest progress, marketboard prices, and container logs. Non-admins get a 403 on every dashboard
 route, including the POST actions, not just a hidden nav link.
 
 **Branding** — server name, tagline, emoji favicon, logo, accent colour, light or
@@ -326,6 +326,34 @@ kept for reference) and lives in the web app's own database from then on.
   purchase, and can reset the listings to the original catalogue.
 * Buyers get a notification when an order is delivered, and **Your purchases**
   lists their orders.
+
+## Marketboard
+
+**Dashboard → Marketboard** sets what everything on the in-game marketboard
+costs (the fork's server lists every tradable item there, 50 listings each by
+default). It's laid out like the board: the four tabs (Weapons, Armor, Items,
+Housing), each tab's search categories, each category's items.
+
+* **An item's price** is *gil per level × its level + its rarity's bonus*. The
+  level is the equip level or the item level (a setting per tab: equip level for
+  weapons and armor, item level for the rest). HQ multiplies the rarity bonus
+  (×2 by default; a white item's bonus is 0, so its HQ costs the same).
+* **Built-in rates**: Weapons and Armor 100 gil a level with 0 / 2,000 / 4,000 /
+  8,000 / 20,000 for white / pink / green / blue / purple; Items (crafting
+  supplies and everything else) 3 a level with those bonuses divided by 100;
+  Housing 50 a level with the full bonuses.
+* **Three levels of settings**: each tab's rates; a category can change any of
+  them (empty fields keep the tab's); any item can have its own NQ and HQ price
+  (empty keeps the computed one, shown greyed). **Find an item** searches by name.
+* **Listings**: how many each item has, how many of those are HQ (for items that
+  can be), the largest stack, and the tax buyers pay on top (5 %, as retail).
+* **Latest sales** lists what players bought.
+
+Changes are written to the server's `world.db` (the `marketboard_*` tables) and
+the server reads them whenever the board is used, so they apply at once, logged
+in or not. The items and categories come from your game install: **Read the
+item list from the game** runs `kawari-questdump items` (the fork's, from a build
+with the marketboard), which also writes `marketboard-categories.json`.
 
 ## Diagnostics
 
@@ -574,11 +602,11 @@ is now the complete one.
 
 ```
 kawari_core/     shared, Qt-free: dbtools, chardata, auracite, schemagen,
-                 versions, upstream, questlab, progress, shop, gamedata,
-                 constants, core
+                 versions, upstream, questlab, progress, shop, marketboard,
+                 gamedata, constants, core
 kawari_web/      Flask app: config, webdb, auth, podman_api, stats, app,
                  dashboard, upstreamcfg, srcbuild, questlab, progress, shop,
-                 templates/, static/
+                 marketboard, templates/, static/
 Containerfile    rootless-friendly image, runs as a non-root user
 run.sh           build + run with the right mounts
 kawari-web.container  systemd quadlet unit

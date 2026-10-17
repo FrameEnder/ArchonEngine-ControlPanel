@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Marketboard · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+{% include "dashboard/_nav.html" %}
+
+{% macro rates_inputs(values, blank_ok, placeholders) %}
+  <div class="rates">
+    <label>Gil per level<input name="per_level" inputmode="numeric" value="{{ values.per_level if values.per_level is not none else '' }}"
+           placeholder="{{ placeholders.per_level if placeholders else '' }}"></label>
+    <label>Level
+      <select name="level_source">
+        {% if blank_ok %}<option value="">The tab's ({{ M.LEVEL_SOURCES[placeholders.level_source] }})</option>{% endif %}
+        {% for key, label in M.LEVEL_SOURCES.items() %}
+        <option value="{{ key }}" {{ 'selected' if values.level_source == key }}>{{ label }}</option>{% endfor %}
+      </select></label>
+    {% for r in M.RARITIES %}
+    <label><span class="rarity rarity-{{ r }}">{{ r }}</span> bonus
+      <input name="rarity_{{ r }}" inputmode="numeric" value="{{ values.rarity[loop.index0] if values.rarity and values.rarity[loop.index0] is not none else '' }}"
+             placeholder="{{ placeholders.rarity[loop.index0] if placeholders else '' }}"></label>
+    {% endfor %}
+    <label>HQ × bonus<input name="hq_multiplier" inputmode="numeric" value="{{ values.hq_multiplier if values.hq_multiplier is not none else '' }}"
+           placeholder="{{ placeholders.hq_multiplier if placeholders else '' }}"></label>
+  </div>
+{% endmacro %}
+
+<section class="card">
+  <h2>Marketboard</h2>
+  <p class="dim">Every item the in-game marketboard lists, laid out as the board has them. An item costs
+     <b>gil per level × its level + its rarity's bonus</b>; HQ multiplies the bonus. Each tab has rates, a category
+     can change some of them, and any item can have its own price. The server reads these whenever someone uses the
+     board, so changes apply at once: no restart.</p>
+  {% if board %}
+    <p><b>{{ '{:,}'.format(board.items|length) }}</b> items in <b>{{ board.categories|length }}</b> categories, from
+       your game install's item list.</p>
+  {% elif board.problem == 'old' %}
+    <p class="line err">The item list was read before it had what the marketboard needs. Read it again.</p>
+  {% elif board.problem == 'missing' %}
+    <p class="line err">The item list hasn't been read from the game yet.</p>
+  {% else %}<p class="line err">{{ board.problem }}</p>{% endif %}
+  <form method="post" class="rowactions">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="action" value="index">
+    <button class="btn {{ '' if board else 'accent' }}" {{ 'disabled' if not (tool.ok and tool.has_categories) }}>Read the item list from the game</button>
+  </form>
+  {% if not tool.ok %}<p class="line err">{{ tool.reason }}</p>
+  {% elif not tool.has_categories %}<p class="line err">The active build's kawari-questdump predates the marketboard: build the fork again.</p>{% endif %}
+  {% if problem %}<p class="line err">{{ problem }}</p>{% endif %}
+</section>
+
+{% if board and prices %}
+<div class="cols">
+<form method="post" class="card">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <input type="hidden" name="action" value="settings">
+  <h2>Listings</h2>
+  {% for key, (label, default) in M.SETTINGS.items() %}
+  <label>{{ label }}<input name="{{ key }}" type="number" min="0" value="{{ prices.settings[key] }}" placeholder="{{ default }}"></label>
+  {% endfor %}
+  <p class="dim small">Every item always has this many listings; one that's bought is replaced. Items that can't be HQ
+     list only NQ. Stacks are random, from 1 to the largest stack (or the item's own stack size, if smaller).</p>
+  <button class="btn accent">Save</button>
+</form>
+
+<form method="get" class="card">
+  <h2>Find an item</h2>
+  <label>Name<input name="q" value="{{ query }}" placeholder="e.g. Maple Lumber"></label>
+  <button class="btn">Search</button>
+  {% if query and not results %}<p class="dim">Nothing on the marketboard is called that.</p>{% endif %}
+</form>
+</div>
+
+{% if results %}
+<section class="card">
+  <h2>Items called “{{ query }}”</h2>
+  {% with rows=results, show_category=True %}{% include "dashboard/_marketboard_items.html" %}{% endwith %}
+</section>
+{% endif %}
+
+{% for tab, tab_name in M.TABS.items() %}
+<section class="card">
+  <h2>{{ tab_name }}</h2>
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="action" value="tab">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    {{ rates_inputs(prices.tabs[tab], False, M.DEFAULT_RATES[tab]) }}
+    <div class="rowactions">
+      <button class="btn accent">Save {{ tab_name }} rates</button>
+      <button class="btn" name="action" value="tab_reset">Back to the built-in rates</button>
+    </div>
+  </form>
+  <details class="drop"><summary>{{ board.tab_categories(tab)|length }} categories</summary>
+    <table class="grid small">
+      <tr><th>Category</th><th>Items</th><th>Rates</th></tr>
+      {% for cat in board.tab_categories(tab) %}
+      <tr><td><a href="{{ url_for('dashboard.marketboard_category', category_id=cat.id) }}">{{ cat.name }}</a></td>
+          <td class="mono">{{ cat.items|length }}</td>
+          <td>{% if cat.id in prices.categories %}<b>changed</b>{% else %}<span class="dim">the tab's</span>{% endif %}</td></tr>
+      {% endfor %}
+    </table>
+  </details>
+</section>
+{% endfor %}
+
+{% if sales %}
+<section class="card">
+  <h2>Latest sales</h2>
+  <table class="grid small">
+    <tr><th>When</th><th>Item</th><th>Qty</th><th>Price each</th><th>Tax</th><th>Buyer</th></tr>
+    {% for sale in sales %}
+    <tr><td class="mono">{{ sale.when }}</td>
+        <td>{{ board.items[sale.item_id].name if sale.item_id in board.items else sale.item_id }}{{ ' (HQ)' if sale.hq }}</td>
+        <td class="mono">{{ sale.quantity }}</td><td class="mono">{{ '{:,}'.format(sale.price_per_unit) }}</td>
+        <td class="mono">{{ '{:,}'.format(sale.tax) }}</td><td>{{ sale.buyer_name }}</td></tr>
+    {% endfor %}
+  </table>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}
