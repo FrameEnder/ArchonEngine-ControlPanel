@@ -19,6 +19,11 @@ removed.
 
 The probe uploads to POST /api/diag/snapshot with the same per-account token as
 the Kawari Companion sync (Settings -> Character sync).
+
+Kawari Recorder (2.6+) sends each retail battle it records to POST /api/diag/battle
+(the same token): one gzipped JSON file per battle, kept in <web>/diag/battles and
+filed in the diagnostics repository under battles/ as soon as it arrives, so they
+can be read without anyone exporting anything.
 """
 
 from __future__ import annotations
@@ -28,6 +33,7 @@ import gzip
 import json
 import re
 import sqlite3
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -50,6 +56,10 @@ CONTAINER_CAPTURE_DIR = "/kawari/data/captures"
 CONTAINER_NAVMESH_DIR = "/kawari/data/navimesh"
 
 MAX_SNAPSHOT_BYTES = 2 * 1024 * 1024
+# A battle file is gzipped JSON with every packet in it; a long dungeon can be tens of MB. The app's 8 MB request limit
+# is for forms, so the battle route reads its body itself, up to this.
+MAX_BATTLE_BYTES = 64 * 1024 * 1024
+BATTLE_NAME = re.compile(r"^[0-9]{8}-[0-9]{6}-[0-9]+(-[a-z0-9-]+)?(-[0-9]+)?\.json\.gz$")
 KEEP_SNAPSHOTS = 200
 MAX_CAPTURE_BYTES = 40 * 1024 * 1024     # uncompressed, across all captures in a bundle
 LOG_LINES = 4000
@@ -95,7 +105,7 @@ def diag_ping():
     user_id = owner_of(settings().webapp_db, _bearer())
     if user_id is None:
         return jsonify({"ok": False, "error": "unknown or missing token"}), 401
-    return jsonify({"ok": True, "server": "kawari-web", "accepts": "diag-snapshot/1"})
+    return jsonify({"ok": True, "server": "kawari-web", "accepts": "diag-snapshot/1 diag-battle/1"})
 
 
 @api.route("/api/diag/snapshot", methods=["POST"])
@@ -126,6 +136,133 @@ def diag_snapshot():
     for old in files[:-KEEP_SNAPSHOTS]:
         old.unlink(missing_ok=True)
     return jsonify({"ok": True, "stored": name})
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  Battles (from Kawari Recorder)
+# ════════════════════════════════════════════════════════════════════════════
+_battle_lock = threading.Lock()
+
+
+def _battle_dir() -> Path:
+    path = _diag_dir() / "battles"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _battle_index() -> dict:
+    path = _battle_dir() / "index.json"
+    if path.exists():
+        try:
+            return json.loads(path.read_text())
+        except ValueError:
+            pass
+    return {"Battles": []}
+
+
+def _save_battle_index(index: dict) -> None:
+    path = _battle_dir() / "index.json"
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(index, indent=1))
+    temporary.replace(path)
+
+
+def _battle_summary(raw: bytes) -> dict:
+    """The few things the page shows about a battle, read from the file itself."""
+    try:
+        battle = json.loads(gzip.decompress(raw))
+    except (OSError, ValueError):
+        return {}
+    events = battle.get("Events") or []
+    setup = battle.get("Setup") or {}
+    return {
+        "Start": battle.get("Start"), "End": battle.get("End"),
+        "TerritoryId": battle.get("TerritoryId"), "Zone": battle.get("Zone", ""),
+        "Content": battle.get("Content", ""), "Field": bool(battle.get("Field")),
+        "Actors": len(battle.get("Actors") or {}), "Actions": len(battle.get("Actions") or []),
+        "Marks": sum(1 for e in events if e.get("Kind") in ("mark", "auto mark")),
+        "Job": setup.get("JobName", ""), "Level": setup.get("Level"),
+        "Recorder": battle.get("RecorderVersion", ""),
+        "HooksFailed": [k for k, v in (battle.get("Hooks") or {}).items() if str(v).startswith("FAILED")],
+    }
+
+
+def _file_battle(name: str) -> None:
+    """Commits a battle (and the battle list) to the diagnostics repository, if one is set up. Runs in the background."""
+    if not (_get("repo") and _get("token")):
+        return
+    with _battle_lock:
+        index = _battle_index()
+        entry = next((b for b in index["Battles"] if b.get("File") == name), None)
+        path = _battle_dir() / name
+        if entry is None or not path.exists():
+            return
+        public_index = {"Battles": [{k: v for k, v in b.items() if not k.startswith("_")} for b in index["Battles"]]}
+        files = {
+            f"battles/{name}": path.read_bytes(),
+            "battles/index.json": json.dumps(public_index, indent=1).encode(),
+            "battles/latest.txt": f"battles/{name}\n".encode(),
+        }
+        try:
+            url = _github().commit_files(files, f"Battle: {entry.get('Zone', '')} {entry.get('Content', '')}"
+                                                f"{' (' + entry['Label'] + ')' if entry.get('Label') else ''}".strip())
+            entry["_filed"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+            entry["_url"] = url
+            entry.pop("_error", None)
+        except Exception as exc:                        # noqa: BLE001
+            entry["_error"] = str(exc)
+        _save_battle_index(index)
+
+
+@api.route("/api/diag/battle", methods=["POST"])
+def diag_battle():
+    """A battle from Kawari Recorder: ?file=<its file name>&label=<the run's label>&finished=1, the body its .json.gz."""
+    user_id = owner_of(settings().webapp_db, _bearer())
+    if user_id is None:
+        return jsonify({"ok": False, "error": "unknown or missing token"}), 401
+    name = request.args.get("file", "")
+    if not BATTLE_NAME.match(name):
+        return jsonify({"ok": False, "error": "file must be a Recorder battle name (<date>-<time>-<territory>-<what>.json.gz)"}), 400
+    try:
+        length = int(request.headers.get("Content-Length", "0"))
+    except ValueError:
+        length = 0
+    if length <= 0:
+        return jsonify({"ok": False, "error": "empty body"}), 400
+    if length > MAX_BATTLE_BYTES:
+        return jsonify({"ok": False, "error": f"battle too large (over {MAX_BATTLE_BYTES // 1048576} MB)"}), 413
+    raw = request.environ["wsgi.input"].read(length)
+    summary = _battle_summary(raw)
+    if not summary:
+        return jsonify({"ok": False, "error": "not a gzipped battle"}), 400
+
+    with _battle_lock:
+        (_battle_dir() / name).write_bytes(raw)
+        index = _battle_index()
+        entry = next((b for b in index["Battles"] if b.get("File") == name), None)
+        if entry is None:
+            entry = {"File": name}
+            index["Battles"].append(entry)
+        entry.update(summary)
+        entry["Label"] = request.args.get("label", "")[:200]
+        entry["Finished"] = request.args.get("finished", "1") == "1"
+        entry["Bytes"] = len(raw)
+        entry["_received"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        entry["_account"] = user_id
+        index["Battles"].sort(key=lambda b: str(b.get("Start") or ""))
+        _save_battle_index(index)
+    threading.Thread(target=_file_battle, args=(name,), daemon=True).start()
+    return jsonify({"ok": True, "stored": name, "filing": bool(_get("repo") and _get("token"))})
+
+
+def _recent_battles(since: float) -> list[dict]:
+    """Battles received since then, for a bundle's README."""
+    out = []
+    for entry in _battle_index()["Battles"]:
+        path = _battle_dir() / entry.get("File", "")
+        if path.exists() and path.stat().st_mtime >= since:
+            out.append(entry)
+    return out
 
 
 def _recent_snapshots(since: float, limit: int = 30) -> list[Path]:
@@ -378,6 +515,7 @@ def build_bundle(note: str, content_ids: list[int], minutes: int,
     characters = [_character_state(cid) for cid in content_ids]
     snapshots = _recent_snapshots(since)
     captures = _captures(since)
+    battles = _recent_battles(since)
     build = _build_info()
 
     meta = {
@@ -392,6 +530,8 @@ def build_bundle(note: str, content_ids: list[int], minutes: int,
             "config": "config.json",
             "captures": [f"captures/{p.name}.gz" for p in captures],
             "snapshots": [f"snapshots/{p.name}" for p in snapshots],
+            # Filed on their own as they arrived; these are the ones from this bundle's window.
+            "battles": [f"battles/{b['File']}" for b in battles],
         },
     }
     if quest_test:
@@ -423,6 +563,11 @@ def _readme(meta: dict, characters: list, captures: list, snapshots: list) -> st
         lines.append(f"* Quest test: quest {test.get('quest')} ({test.get('name', '')}) on {test.get('character', '')},"
                      f" from {test.get('from', '')}, started {test.get('started', '')}")
     lines.append(f"* Packet captures: {len(captures)}, probe snapshots: {len(snapshots)}")
+    battles = meta["files"].get("battles") or []
+    if battles:
+        lines.append(f"* Retail battles from Kawari Recorder in this window (in the repository's battles/): {len(battles)}")
+        for path in battles:
+            lines.append(f"  * `{path}`")
     lines.append("")
     for ch in characters:
         name = (ch.get("character") or {}).get("name") or ch.get("content_id")
@@ -456,8 +601,9 @@ def diagnostics():
             latest = json.loads(snapshots[0].read_text())
         except ValueError:
             latest = None
+    battles = list(reversed(_battle_index()["Battles"]))[:30]
     return render_template(
-        "dashboard/diagnostics.html", section="diagnostics",
+        "dashboard/diagnostics.html", section="diagnostics", battles=battles,
         capture=capture_status(), characters=characters,
         repo=_get("repo"), branch=_get("branch", "main"), has_token=bool(_get("token")),
         last_sent=_get("last_sent"), last_url=_get("last_url"),
@@ -584,6 +730,16 @@ def diagnostics_send():
                       f"({len(files)} files, {size // 1024} KiB)")
     _set("last_url", url)
     flash(f"Sent {folder} ({len(files)} files, {size // 1024} KiB).", "ok")
+    return redirect(url_for("dashboard.diagnostics"))
+
+
+@dashboard.route("/diagnostics/battle/<name>/file", methods=["POST"])
+@auth.admin_required
+def diagnostics_file_battle(name: str):
+    """Files a battle again (after the repository was set up, or a failed try)."""
+    if BATTLE_NAME.match(name) and (_battle_dir() / name).exists():
+        threading.Thread(target=_file_battle, args=(name,), daemon=True).start()
+        flash(f"Filing {name} in the repository.", "ok")
     return redirect(url_for("dashboard.diagnostics"))
 
 

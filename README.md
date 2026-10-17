@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.13.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.14.0.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -342,6 +342,13 @@ needs, and commits it as one bundle to a private GitHub repository:
   position, conditions). It posts to `POST /api/diag/snapshot` with the same
   token as character sync;
 * which build is running, and the server config with secrets removed.
+
+**Battles from Kawari Recorder.** The Recorder (2.6+) can send each retail battle it records straight here:
+in its Battles tab, under *Send to Kawari Web*, enter this site's address and your character sync token
+(the same as the Probe's), then *Test*. Each battle arrives at `POST /api/diag/battle` as one gzipped file,
+is kept in `<web>/diag/battles`, and is filed in the diagnostics repository under `battles/` straight away
+(with `battles/index.json` listing every battle and its label). The Diagnostics page lists them; *File now*
+retries one that couldn't be filed. A bundle's README names the battles received during its window.
 
 It needs the repository (`owner/name`) and a fine-grained GitHub token limited
 to that one repository with *Contents: Read and write*. Game files never go in a

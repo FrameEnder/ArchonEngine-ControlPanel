@@ -73,7 +73,7 @@ def create_app(settings: Settings | None = None) -> Flask:
         # Until an administrator exists, everything redirects to first-run setup.
         if not webdb.has_any_profile(settings.webapp_db):
             allowed = {"main.setup", "main.static_upload", "static",
-                       "api.sync", "api.ping", "api.diag_snapshot", "api.diag_ping"}
+                       "api.sync", "api.ping", "api.diag_snapshot", "api.diag_ping", "api.diag_battle"}
             if request.endpoint not in allowed:
                 return redirect(url_for("main.setup"))
         return None

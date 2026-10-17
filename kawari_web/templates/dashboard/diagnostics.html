@@ -110,6 +110,34 @@
   </section>
 
   <section class="card">
+    <h2>Battles</h2>
+    <p class="dim">Retail battles from Kawari Recorder (Battles tab → Send to Kawari Web, with your character sync
+      token). Each is filed in the repository's <span class="mono">battles/</span> as it arrives.</p>
+    {% if battles %}
+      <table class="grid small">
+        <tr><th>When</th><th>Where</th><th>Label</th><th>Size</th><th>Repository</th></tr>
+        {% for b in battles %}
+        <tr>
+          <td class="mono">{{ (b.Start or '')[:16] | replace('T', ' ') }}</td>
+          <td>{{ b.Zone }} {{ b.Content }}{% if b.Field %} (field){% endif %}{% if b.Job %} · {{ b.Job }} {{ b.Level }}{% endif %}
+            {% if b.HooksFailed %}<br><span class="pill err small">hooks failed: {{ b.HooksFailed | join(', ') }}</span>{% endif %}</td>
+          <td>{{ b.Label }}</td>
+          <td>{{ ((b.Bytes or 0) / 1024) | round | int }} KiB</td>
+          <td>{% if b._filed %}<a href="{{ b._url }}">filed</a>{% elif b._error %}<span class="pill err small" title="{{ b._error }}">failed</span>{% else %}<span class="dim">not filed</span>{% endif %}
+            {% if not b._filed %}
+            <form method="post" action="{{ url_for('dashboard.diagnostics_file_battle', name=b.File) }}" style="display:inline">
+              <input type="hidden" name="csrf" value="{{ csrf_token }}"><button class="small">File now</button>
+            </form>
+            {% endif %}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="dim">No battles yet.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
     <h2>Repository</h2>
     <p class="dim">A <strong>private</strong> GitHub repository, and a fine-grained token limited to that one
       repository with <em>Contents: Read and write</em>. The token is stored in webapp.db and never shown again.</p>
