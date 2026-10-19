@@ -1,8 +1,8 @@
-{#- The admin sidebar. nav_key comes from dashboard/_layout.html. On phones it
+{#- The admin sidebar. _adm_nav comes from dashboard/_layout.html. On phones it
     folds behind a Menu button (a checkbox, so it works without JavaScript). -#}
 {% from "_icons.html" import icon, brand_mark %}
 {% macro link(key, endpoint, label, icon_name, anchor='') -%}
-  {%- set on = nav_key == key -%}
+  {%- set on = _adm_nav == key -%}
   <a class="side-link {{ 'on' if on }}" href="{{ url_for(endpoint) }}{{ anchor }}" {{ 'aria-current=page' if on }}>{{ icon(icon_name, 'icon sm') }}{{ label }}</a>
 {%- endmacro %}
 <nav class="admin-side" aria-label="Admin">

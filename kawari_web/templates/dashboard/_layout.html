@@ -3,8 +3,8 @@
     {% block page_title %} and put buttons in the header with {% block page_actions %}. -#}
 {% extends "base.html" %}
 {% block body_class %}admin{% endblock %}
-{%- set ep = request.endpoint or '' -%}
-{%- set pages = {
+{%- set _adm_ep = request.endpoint or '' -%}
+{%- set _adm_pages = {
     'dashboard.overview': ('overview', 'Server', 'Overview'),
     'dashboard.logs': ('logs', 'Server', 'Logs'),
     'dashboard.diagnostics': ('diagnostics', 'Server', 'Diagnostics'),
@@ -28,16 +28,16 @@
     'shop.new': ('shop', 'Community', 'New listing'),
     'dashboard.branding': ('branding', 'Community', 'Branding'),
 } -%}
-{%- set page = pages.get(ep, (section or 'overview', 'Dashboard', 'Dashboard')) -%}
-{%- set nav_key = page[0] if ep != 'dashboard.job' else (section or 'updates') -%}
+{%- set _adm_page = _adm_pages.get(_adm_ep, (section or 'overview', 'Dashboard', 'Dashboard')) -%}
+{%- set _adm_nav = _adm_page[0] if _adm_ep != 'dashboard.job' else (section or 'updates') -%}
 {% block shell %}
 <div class="admin-shell">
   {% include "dashboard/_nav.html" %}
   <div class="admin-main">
     <header class="admin-head">
       <div class="titles">
-        <div class="group">{% block page_group %}{{ page[1] }}{% endblock %}</div>
-        <h1>{% block page_title %}{{ page[2] }}{% endblock %}</h1>
+        <div class="group">{% block page_group %}{{ _adm_page[1] }}{% endblock %}</div>
+        <h1>{% block page_title %}{{ _adm_page[2] }}{% endblock %}</h1>
       </div>
       <div class="head-actions">{% block page_actions %}{% endblock %}</div>
     </header>
