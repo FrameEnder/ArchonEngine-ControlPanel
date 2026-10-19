@@ -346,6 +346,24 @@
   {% endif %}
 </section>
 
+<details class="card" id="mirrors" {{ 'open' if mirror_pairs }}><summary><b>Dependency mirrors</b>
+  {% if mirror_pairs %}<span class="dim small">{{ mirror_pairs | length }} in use</span>{% endif %}</summary>
+  <p class="dim">Building from source fetches some of Kawari's libraries straight from GitHub. To fetch them from
+     your own Gitea or Forgejo mirrors instead, give one line per repository: the original URL, a space, and your
+     mirror's URL. The build rewrites them for git and cargo (including the git submodule), so the source tree stays
+     as it is. A mirror has to have the commits Kawari's <span class="mono">Cargo.lock</span> asks for, so make it a
+     pull mirror that keeps syncing, readable without signing in.</p>
+  <p class="dim small">What Kawari fetches from GitHub today:
+    {% for url in mirror_known %}<span class="mono">{{ url }}</span>{{ ', ' if not loop.last }}{% endfor %}
+    (the last one is a git submodule of recastnavigation-rs-sys).</p>
+  <form method="post" action="{{ url_for('dashboard.save_mirrors') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <textarea name="mirrors" rows="5" class="mono" spellcheck="false"
+      placeholder="https://github.com/redstrate/physis https://gitea.example/mirrors/physis">{{ mirror_text }}</textarea>
+    <button class="btn">Save mirrors</button>
+  </form>
+</details>
+
 <details class="card"><summary><b>Update settings</b></summary>
   <form method="post" action="{{ url_for('dashboard.update_settings') }}">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">

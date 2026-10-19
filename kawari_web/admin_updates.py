@@ -16,7 +16,7 @@ from flask import flash, redirect, render_template, request, url_for
 from kawari_core import dbtools, schemagen, upstream
 from kawari_core import versions as V
 
-from . import auth, retention, srcbuild, upstreamcfg, webdb
+from . import auth, mirrors, retention, srcbuild, upstreamcfg, webdb
 from .admin_base import (build_context_tar, dashboard, podman, runner, settings,
                          write_build_files)
 from .admin_setup import _recreate_container
@@ -52,7 +52,8 @@ def updates():
         build_modes=upstream.BUILD_MODES, probed=probed,
         source_modes=upstream.SOURCE_MODES, forge_labels=upstream.FORGE_LABELS,
         picker_refusal=_ref_refusal(upstream.source(), "x"),
-        cache_mib=int(webdb.get_setting(s.webapp_db, "source_cache_bytes", "0") or 0) / 1048576)
+        cache_mib=int(webdb.get_setting(s.webapp_db, "source_cache_bytes", "0") or 0) / 1048576,
+        mirror_text=mirrors.text(s), mirror_pairs=mirrors.pairs(s), mirror_known=mirrors.KNOWN)
 
 
 @dashboard.route("/updates/check", methods=["POST"])
@@ -451,6 +452,22 @@ def update_settings():
                       str(max(1, min(50, int(request.form.get("keep", "5") or 5)))))
     flash("Update settings saved.", "ok")
     return redirect(url_for("dashboard.updates"))
+
+
+@dashboard.route("/updates/mirrors", methods=["POST"])
+@auth.admin_required
+def save_mirrors():
+    s = settings()
+    problems = mirrors.save(s, request.form.get("mirrors", ""))
+    if problems:
+        for problem in problems:
+            flash(problem, "err")
+        flash("Not saved - fix the lines above.", "info")
+    else:
+        count = len(mirrors.pairs(s))
+        flash(f"Saved {count} mirror(s); the next build from source uses them." if count
+              else "No mirrors: builds fetch from the original URLs.", "ok")
+    return redirect(url_for("dashboard.updates") + "#mirrors")
 
 
 @dashboard.route("/updates/prune", methods=["POST"])

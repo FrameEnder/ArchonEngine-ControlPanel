@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.17.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.18.0.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -496,6 +496,17 @@ migrate, recreate.
   clean, a build is versioned by its commit. With uncommitted changes it is
   `<commit>-dev<yymmddHHMMSS>` and tagged *dev* in the history, so it can never
   pass for the commit it started from — and each rebuild gets its own image tag.
+* **Dependency mirrors** (Updates → Dependency mirrors): Kawari's `Cargo.toml`
+  fetches physis, Icarus and recastnavigation-rs-sys from GitHub, and the last
+  pulls the recastnavigation C++ library in as a git submodule. Give one line per
+  repository, `<original URL> <your mirror's URL>`, and the builder turns them into
+  `git config url.<mirror>.insteadOf <original>` with cargo fetching through git
+  (`CARGO_NET_GIT_FETCH_WITH_CLI`), so cargo's fetches and the submodule come from
+  your Gitea or Forgejo while `Cargo.toml` and `Cargo.lock` stay as upstream has
+  them. Each mirror must have the commits the lock file asks for (a pull mirror
+  that keeps syncing) and be readable without signing in; for Icarus, mirror every
+  branch, since each game patch gets its own `ver/...` branch. The build log lists
+  the mirrors it used.
 * **The schema comes from the tree that was compiled**, not GitHub: an
   unpushed migration change is exactly what the database step must see.
 * **Kept between builds** under `<data>/source/`: the cargo registry, the git

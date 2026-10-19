@@ -36,6 +36,7 @@ from kawari_core import core as kcore
 from kawari_core import schemagen, upstream
 from kawari_core import versions as V
 
+from . import mirrors
 from .podman_api import container_spec
 
 BUILDER_IMAGE = "localhost/kawari-builder"
@@ -62,6 +63,17 @@ BUILD_SCRIPT = r"""
 set -euo pipefail
 say() { printf '==> %s\n' "$*"; }
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 2; }
+
+# Dependency mirrors (Updates → Dependency mirrors): "original mirror" per line, as git URL rewrites, with cargo
+# fetching through git so they apply to its fetches and to submodules.
+if [ -n "${KW_GIT_MIRRORS:-}" ]; then
+  while read -r FROM TO; do
+    if [ -z "${FROM:-}" ] || [ -z "${TO:-}" ]; then continue; fi
+    git config --global --add "url.${TO}.insteadOf" "${FROM}"
+    say "Mirror: ${FROM} -> ${TO}"
+  done <<< "${KW_GIT_MIRRORS}"
+  export CARGO_NET_GIT_FETCH_WITH_CLI=true
+fi
 
 AUTH=()
 if [ -n "${KW_AUTH_HEADER:-}" ]; then
@@ -297,6 +309,9 @@ def builder_spec(s, src: upstream.Source, oodle: Path, name: str, ref: str = "")
         "KW_FAST": "1" if src.fast_build == "1" else "0",
         "KW_SCHEMA_FILES": " ".join(schemagen.SOURCES.values()) + " README.md",
     }
+    mirror_lines = mirrors.builder_env(s)
+    if mirror_lines:
+        env["KW_GIT_MIRRORS"] = mirror_lines
     if src.build_mode == "source":
         env["KW_REF"] = ref
         header = src.git_auth_header()
