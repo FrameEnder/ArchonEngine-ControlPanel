@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.16.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.17.0.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -300,7 +300,22 @@ every quest from A Realm Reborn to Dawntrail, against the quest scripts in the
   filterable by expansion, type, journal section, status and a search by ID,
   script or name. Each quest links to its Quest Lab page.
 
-The index needs a fork build whose `kawari-questdump` writes format 2 (main
+**Misc Content** (the second tab of Progress) does the same for everything that
+isn't a quest: every dungeon, trial, raid, ultimate raid, deep dungeon, variant
+dungeon, guildhest and other duty, and every open-world zone, per expansion.
+
+* **Where they come from.** The content index (**Build the content index** on the
+  tab), which `kawari-questdump content` makes from the game install: every duty
+  (ContentFinderCondition) with its content type, short code, territory, levels and
+  expansion, and every open-world zone. It needs a fork build from 2026-10-18 on.
+* **Scripted** means the active build has the duty's content script
+  (`resources/scripts/content/<short code>.lua`, what the server runs when it
+  starts); **has spawns** means one of the build's drop-ins adds battle NPCs to its
+  map. A duty is counted done with both, started with one. A zone is counted when
+  it has monster spawns; without them it's empty on Kawari.
+* It shows what the server has, not how well it plays.
+
+The quest index needs a fork build whose `kawari-questdump` writes format 2 (main
 scenario flag, expansion and journal section). With an older index the page still
 works, but says so and counts every quest as a side quest.
 

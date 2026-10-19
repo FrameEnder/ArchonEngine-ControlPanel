@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Misc Content · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+{% include "dashboard/_nav.html" %}
+{% set progress_tab = "content" %}{% include "dashboard/_progress_tabs.html" %}
+
+{% macro meter(t, label, what="scripted, with spawns") %}
+  <div class="meter">
+    <div class="meter-head"><span>{{ label }}</span>
+      <span class="mono">{{ t.done }} / {{ t.total }}{% if t.total %} · {{ '%.1f' | format(t.percent) }}%{% endif %}</span></div>
+    <span class="track"><span class="fill" style="width: {{ '%.2f' | format(t.percent) }}%"></span></span>
+    <div class="dim small">{{ what }}{% if t.started %}; {{ t.started }} started{% endif %}</div>
+  </div>
+{% endmacro %}
+
+{% macro expansion_name(ex) %}{{ data.expansion_names.get(ex, 'Expansion ' ~ ex) }}{% endmacro %}
+
+{% if not data.loaded %}
+<section class="card">
+  <h2>Misc content</h2>
+  <p>Every dungeon, trial, raid, deep dungeon and other duty, and every open-world zone, against what your server
+     has for it. The lists come from your own game install: build the content index once (and again after a game
+     update).</p>
+  {% if tool.ok and has_content_cmd %}
+  <form method="post" action="{{ url_for('dashboard.progress_content_index') }}" class="rowactions">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <button class="btn accent" {{ 'disabled' if busy }}>Build the content index</button>
+  </form>
+  {% else %}
+  <p class="line err">{{ tool.reason or "This build's kawari-questdump predates the content command — build the fork again." }}</p>
+  {% endif %}
+</section>
+{% else %}
+
+<section class="card">
+  <h2>Misc content</h2>
+  <p class="dim">Every duty and open-world zone in your game install's content index (built {{ index_time }}),
+     against the active build{% if build %} (<span class="mono">{{ build }}</span>){% endif %}.
+     A duty is <b>scripted</b> when the build has its content script (<span class="mono">resources/scripts/content/&lt;short code&gt;.lua</span>,
+     what the server runs when the duty starts) and <b>has spawns</b> when a drop-in adds its enemies; done means
+     both. A zone has spawns when a drop-in adds its monsters (without one, the zone is empty). This is what the
+     server has, not how well it plays: a script can still be rough, and the fork's documentation says how far each
+     one goes.</p>
+  {% if tool.ok and has_content_cmd %}
+  <form method="post" action="{{ url_for('dashboard.progress_content_index') }}" class="rowactions">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <button class="btn" {{ 'disabled' if busy }}>Build the content index again</button>
+  </form>
+  {% endif %}
+  <div class="cols">
+    {% for g in groups %}<div>{{ meter(g.tally, g.name) }}</div>{% endfor %}
+    <div>{{ meter(zone_tally, 'Open-world zones', 'with monster spawns') }}</div>
+  </div>
+</section>
+
+<section class="card">
+  <form method="get" action="{{ url_for('dashboard.progress_content') }}" class="cols fields progress-filters">
+    <label>Expansion
+      <select name="expansion">
+        <option value="">All</option>
+        {% for ex in data.expansions() %}<option value="{{ ex }}" {{ 'selected' if filters.expansion == ex }}>{{ expansion_name(ex) }}</option>{% endfor %}
+      </select></label>
+    <label>Status
+      <select name="status">
+        <option value="">All</option>
+        {% for key, label in status_labels.items() %}<option value="{{ key }}" {{ 'selected' if filters.status == key }}>{{ label }}</option>{% endfor %}
+      </select></label>
+    <label>Search <input type="text" name="q" value="{{ filters.q }}" placeholder="ID or name" autocomplete="off"></label>
+    <div class="rowactions"><button class="btn">Filter</button>
+      <a class="btn" href="{{ url_for('dashboard.progress_content') }}">Clear</a></div>
+  </form>
+</section>
+
+{% for g in groups %}
+<details class="card" id="type-{{ g.key }}" {{ 'open' if filters.q or filters.status }}>
+  <summary><b>{{ g.name }}</b> <span class="dim small">{{ g.rows | length }} shown · {{ g.tally.done }} / {{ g.tally.total }} done{% if g.tally.started %}, {{ g.tally.started }} started{% endif %}</span></summary>
+  <div class="cols progress-cards">
+    {% for ex, t in g.by_expansion if t.total %}
+    <div>{{ meter(t, expansion_name(ex)) }}</div>
+    {% endfor %}
+  </div>
+  {% if g.rows %}
+  <div class="progress-table">
+  <table class="grid">
+    <tr><th>ID</th><th>Duty</th><th>Lv</th><th class="wide-only">Expansion</th><th>Script</th><th>Spawns</th><th>Status</th></tr>
+    {% for d in g.rows %}
+    <tr>
+      <td class="mono">{{ d.id }}</td>
+      <td>{{ d.name }}{% if g.key == 'other' %}<div class="dim small">{{ data.type_name(d.content_type) }}</div>{% endif %}</td>
+      <td>{{ d.level or '' }}{% if d.item_level %}<div class="dim small">i{{ d.item_level }}</div>{% endif %}</td>
+      <td class="dim small wide-only">{{ expansion_name(d.expansion) }}</td>
+      <td class="mono small">{% if d.scripted %}{{ d.short_code }}.lua{% else %}<span class="dim">{{ d.short_code or '—' }}</span>{% endif %}</td>
+      <td class="mono small">{{ d.spawns or '' }}</td>
+      <td><span class="qstatus {{ 'scripted' if d.status == 'done' else ('unverified' if d.status != 'missing' else '') }}">{{ status_labels[d.status] }}</span></td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+  {% else %}<p class="dim">None match the filter.</p>{% endif %}
+</details>
+{% endfor %}
+
+<details class="card" id="zones" {{ 'open' if filters.q or filters.status }}>
+  <summary><b>Open-world zones</b> <span class="dim small">{{ zones | length }} shown · {{ zone_tally.done }} / {{ zone_tally.total }} with monster spawns</span></summary>
+  <div class="cols progress-cards">
+    {% for ex, t in zone_by_expansion if t.total %}
+    <div>{{ meter(t, expansion_name(ex), 'with monster spawns') }}</div>
+    {% endfor %}
+  </div>
+  {% if zones %}
+  <div class="progress-table">
+  <table class="grid">
+    <tr><th>ID</th><th>Zone</th><th class="wide-only">Region</th><th class="wide-only">Expansion</th><th>Spawns</th><th>Status</th></tr>
+    {% for z in zones %}
+    <tr>
+      <td class="mono">{{ z.id }}</td>
+      <td>{{ z.name }}</td>
+      <td class="dim small wide-only">{{ z.region }}</td>
+      <td class="dim small wide-only">{{ expansion_name(z.expansion) }}</td>
+      <td class="mono small">{% if z.spawns %}{{ z.spawns }}<div class="dim small">{{ z.dropin }}</div>{% endif %}</td>
+      <td><span class="qstatus {{ 'scripted' if z.spawns }}">{{ zone_status_labels[z.status] }}</span></td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+  {% else %}<p class="dim">None match the filter.</p>{% endif %}
+</details>
+{% endif %}
+{% endblock %}

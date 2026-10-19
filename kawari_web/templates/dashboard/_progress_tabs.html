@@ -1,0 +1,4 @@
+<nav class="tabs">
+  <a href="{{ url_for('dashboard.progress') }}" class="{{ 'on' if progress_tab == 'quests' }}">Quests</a>
+  <a href="{{ url_for('dashboard.progress_content') }}" class="{{ 'on' if progress_tab == 'content' }}">Misc Content</a>
+</nav>

@@ -3,6 +3,7 @@
 {% block content %}
 <h1>Dashboard</h1>
 {% include "dashboard/_nav.html" %}
+{% set progress_tab = "quests" %}{% include "dashboard/_progress_tabs.html" %}
 
 {% macro meter(t, label) %}
   <div class="meter">
