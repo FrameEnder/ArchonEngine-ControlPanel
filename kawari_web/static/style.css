@@ -700,3 +700,43 @@ input.price { width: 7.5rem; font-variant-numeric: tabular-nums; }
 .rarity-green { color: #58b368; }
 .rarity-blue { color: #5b9be6; }
 .rarity-purple { color: #b07ce8; }
+
+/* ── top bar on phones: brand and account on one row, the menu scrolling under it ─────── */
+@media (max-width: 700px) {
+    .topbar {
+        display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .35rem .6rem;
+        padding: .45rem .8rem .35rem;
+    }
+    .brand { min-width: 0; font-size: 1rem; }
+    .brand > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .brand img { height: 26px; }
+    .useractions { grid-column: 2; grid-row: 1; margin-left: 0; gap: .3rem; }
+    .useractions .btn { padding: .35rem .7rem; }
+    .topbar .mainnav {
+        grid-column: 1 / -1; grid-row: 2;
+        flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+        margin: 0 -.8rem; padding: 0 .8rem .1rem; gap: .15rem;
+        -webkit-overflow-scrolling: touch;
+    }
+    .topbar .mainnav::-webkit-scrollbar { display: none; }
+    .topbar .mainnav a { padding: .35rem .7rem; white-space: nowrap; flex: none; }
+    .avatar-sm { width: 30px; height: 30px; }
+    .bell > summary { width: 32px; height: 32px; font-size: 1.05rem; }
+    /* The menus open under the bar across the screen, rather than off its left edge. */
+    .topbar .dropdown, .topbar .dropdown.wide {
+        position: fixed; top: 3.2rem; right: .6rem; left: .6rem; min-width: 0; max-width: none;
+        max-height: calc(100vh - 4.5rem); overflow-y: auto;
+    }
+}
+
+/* The dashboard's section menu: one scrolling row on phones (the current section is scrolled into view, app.js). */
+@media (max-width: 700px) {
+    .subnav {
+        flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: .15rem;
+        margin: 0 -1.2rem 1rem; padding: 0 1.2rem .2rem;
+        -webkit-overflow-scrolling: touch;
+    }
+    .subnav::-webkit-scrollbar { display: none; }
+    .subnav a { flex: none; white-space: nowrap; padding: .35rem .7rem; }
+    main > h1:first-child { font-size: 1.6rem; margin-bottom: .6rem; }
+}

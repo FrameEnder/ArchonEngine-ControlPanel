@@ -178,3 +178,11 @@ document.addEventListener("change", (event) => {
 document.querySelectorAll("select[data-autosubmit]").forEach((select) => {
     select.addEventListener("change", () => select.form.submit());
 });
+
+// Phones: the dashboard's section menu and the top menu scroll sideways; keep the current one in view.
+document.querySelectorAll(".subnav a.on, .topbar .mainnav a.on").forEach((link) => {
+  const row = link.parentElement;
+  if (row.scrollWidth > row.clientWidth) {
+    row.scrollLeft = link.offsetLeft - (row.clientWidth - link.offsetWidth) / 2;
+  }
+});
