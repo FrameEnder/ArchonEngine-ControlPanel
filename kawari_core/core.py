@@ -373,6 +373,28 @@ class Backups:
                     tar.add(src, arcname=db)
         return out
 
+    def total_bytes(self) -> int:
+        return sum(item["size"] for item in self.list())
+
+    def delete(self, names) -> list[str]:
+        """Delete these archives (by name). Names that aren't a backup here are ignored."""
+        wanted = set(names)
+        removed = []
+        for item in self.list():
+            if item["name"] in wanted and item["path"].resolve().parent == self.dir.resolve():
+                try:
+                    item["path"].unlink()
+                    removed.append(item["name"])
+                except OSError:
+                    pass
+        return removed
+
+    def prune(self, keep: int, protect=()) -> list[str]:
+        """Keep the newest `keep` archives (and any named in `protect`), delete the rest."""
+        protect = set(protect)
+        extra = [i["name"] for i in self.list() if i["name"] not in protect][keep:]
+        return self.delete(extra)
+
     def restore(self, archive: Path) -> list[str]:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         restored = []

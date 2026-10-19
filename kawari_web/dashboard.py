@@ -13,7 +13,7 @@ from kawari_core import auracite, chardata, constants as C, dbtools
 from kawari_core import core as kcore
 from kawari_core import gamedata as G
 
-from . import auth, stats, webdb
+from . import auth, retention, stats, webdb
 from .admin_base import dashboard, podman as _podman, runner, settings as _settings
 from .app import _save_upload
 
@@ -109,6 +109,10 @@ def database():
         profiles=webdb.all_profiles(settings.webapp_db),
         backups=settings.backups.list(),
         backup_bytes=sum(b["size"] for b in settings.backups.list()),
+        protected_backups=retention.protected_backups(settings),
+        keep_backups=retention.keep_backups(settings),
+        keep_snapshots=retention.keep_snapshots(settings),
+        storage=retention.usage(settings),
         sections=auracite.SECTIONS)
 
 
@@ -241,6 +245,7 @@ def migrate():
         flash("Migration failed: " + "; ".join(failed), "err")
     else:
         flash(f"Migrated {', '.join(applied) or 'nothing'} (backup {archive.name}).", "ok")
+    retention.tidy_backups(settings)
     return redirect(url_for("dashboard.database"))
 
 
@@ -253,7 +258,9 @@ def backup():
     except OSError as exc:
         flash(f"Backup failed: {exc}", "err")
         return redirect(url_for("dashboard.database"))
-    flash(f"Created {archive.name}.", "ok")
+    pruned = retention.tidy_backups(settings)
+    flash(f"Created {archive.name}." + (f" Removed {len(pruned)} old backup(s) beyond the limit."
+                                         if pruned else ""), "ok")
     return redirect(url_for("dashboard.database"))
 
 
@@ -292,6 +299,7 @@ def restore_backup(name: str):
     except (OSError, ValueError) as exc:
         flash(f"Restore failed: {exc}", "err")
         return redirect(url_for("dashboard.database"))
+    retention.tidy_backups(settings, protect={name})
     flash(f"Restored {', '.join(restored) or 'nothing'} from {name}. The previous state "
           f"was saved as {safety.name}.", "ok")
     return redirect(url_for("dashboard.database"))
@@ -322,6 +330,35 @@ def download_backup(name: str):
         abort(404)
     return send_file(archive, mimetype="application/gzip", as_attachment=True,
                      download_name=name)
+
+
+@dashboard.route("/database/backups/delete", methods=["POST"])
+@auth.admin_required
+def delete_backups():
+    """Delete the backups ticked in the list."""
+    settings = _settings()
+    names = request.form.getlist("names")
+    if not names:
+        flash("Tick the backups to delete first.", "err")
+        return redirect(url_for("dashboard.database"))
+    removed = settings.backups.delete(names)
+    flash(f"Deleted {len(removed)} backup(s).", "ok")
+    return redirect(url_for("dashboard.database"))
+
+
+@dashboard.route("/database/retention", methods=["POST"])
+@auth.admin_required
+def save_retention():
+    """The limits on backups and snapshots, applied straight away."""
+    settings = _settings()
+    retention.save_limits(settings, request.form.get("keep_backups"),
+                          request.form.get("keep_snapshots"))
+    backups = retention.tidy_backups(settings)
+    snapshots = retention.tidy_snapshots(settings)
+    flash(f"Saved: keeping {retention.keep_backups(settings) or 'every'} backup(s) and "
+          f"{retention.keep_snapshots(settings) or 'every'} snapshot(s) per character. "
+          f"Removed {len(backups)} backup(s) and {snapshots} snapshot(s).", "ok")
+    return redirect(url_for("dashboard.database") + "#retention")
 
 
 @dashboard.route("/database/backups/prune", methods=["POST"])
@@ -452,6 +489,7 @@ def import_character():
             return redirect(url_for("dashboard.database"))
         chardata.snapshot(settings.data_dir, settings.world_db, target,
                           "before-auracite-web")
+        retention.tidy_snapshots(settings, target)
         ch = chardata.load(settings.world_db, target)
         changes, _notes = auracite.build_changes(ch, dump, chosen)
         auracite.apply_changes(ch, changes)

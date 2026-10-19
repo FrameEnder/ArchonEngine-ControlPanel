@@ -247,17 +247,28 @@
   </form>
 </details>
 
-<details class="card"><summary><b>History and snapshots</b></summary>
-  <p class="dim">Every save snapshots first, so any edit here is undoable.</p>
+<details class="card" id="history"><summary><b>History and snapshots</b></summary>
+  <p class="dim">Every save snapshots first, so any edit here is undoable.
+     {{ snapshots | length }} snapshot(s);
+     {% if keep_snapshots %}the newest {{ keep_snapshots }} are kept, older ones are deleted as new ones are taken
+     {% else %}none are deleted automatically{% endif %}
+     (Database, Storage limits).</p>
   <form method="post" class="inline" action="{{ url_for('dashboard.snapshot_character', content_id=ch.content_id) }}">
     {{ csrf() }}
     <input name="label" placeholder="label" maxlength="40">
     <button class="btn">Take snapshot</button>
   </form>
+  <form method="post" id="snapshots-bulk" action="{{ url_for('dashboard.delete_snapshots', content_id=ch.content_id) }}"
+        onsubmit="return confirm('Delete the ticked snapshots permanently?')">
+    {{ csrf() }}
+  </form>
   <table class="grid">
-    <tr><th>Taken</th><th>Label</th><th>Build</th><th></th></tr>
+    <tr><th><input type="checkbox" data-check-all="names" title="Tick all" aria-label="Tick all"></th>
+        <th>Taken</th><th>Label</th><th>Build</th><th></th></tr>
     {% for snap in snapshots %}
     <tr>
+      <td><input type="checkbox" name="names" value="{{ snap.path.name }}" form="snapshots-bulk"
+                 aria-label="Tick {{ snap.taken_at }}"></td>
       <td class="dim">{{ snap.taken_at }}</td><td>{{ snap.label }}</td>
       <td class="mono dim small">{{ snap.build[:9] }}</td>
       <td>
@@ -276,8 +287,11 @@
         </form>
       </td>
     </tr>
-    {% else %}<tr><td colspan="4" class="dim">No snapshots yet.</td></tr>{% endfor %}
+    {% else %}<tr><td colspan="5" class="dim">No snapshots yet.</td></tr>{% endfor %}
   </table>
+  {% if snapshots %}
+  <button class="btn small danger" form="snapshots-bulk">Delete ticked</button>
+  {% endif %}
 </details>
 
 <details class="card"><summary><b>Danger zone</b></summary>

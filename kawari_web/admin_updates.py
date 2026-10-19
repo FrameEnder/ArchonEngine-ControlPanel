@@ -16,7 +16,7 @@ from flask import flash, redirect, render_template, request, url_for
 from kawari_core import dbtools, schemagen, upstream
 from kawari_core import versions as V
 
-from . import auth, srcbuild, upstreamcfg, webdb
+from . import auth, retention, srcbuild, upstreamcfg, webdb
 from .admin_base import (build_context_tar, dashboard, podman, runner, settings,
                          write_build_files)
 from .admin_setup import _recreate_container
@@ -253,6 +253,7 @@ def apply_update():
     if restart:
         steps.append(("Recreate the container",
                       lambda job: _recreate_container(job, expose_admin)))
+    steps.append(("Remove old builds", _prune_builds_step))
     try:
         job = runner().start(title, steps)
     except RuntimeError as exc:
@@ -552,7 +553,20 @@ def _backup_step(job):
     if leaving:
         leaving.leave_backup = archive.name
         store.save()
-    return archive.name
+    pruned = retention.tidy_backups(s)
+    return archive.name + (f" (removed {len(pruned)} old backup(s))" if pruned else "")
+
+
+def _prune_builds_step(job):
+    """Old builds beyond the Builds to keep setting (Update settings), as the Prune button does."""
+    s = settings()
+    store = V.BuildStore(s.data_dir)
+    keep = int(webdb.get_setting(s.webapp_db, "keep_builds", "5") or 5)
+    removed = store.prune(keep)
+    if not removed:
+        raise SkipStep(f"{len(store.ledger.builds)} build(s), keeping {keep}")
+    untagged = _remove_images(s, removed)
+    return f"removed {len(removed)} build(s)" + (f" and {untagged} image tag(s)" if untagged else "")
 
 
 def _snapshot_step(label: str):
@@ -566,7 +580,8 @@ def _snapshot_step(label: str):
         for row in rows:
             chardata.snapshot(s.data_dir, s.world_db, row["content_id"], label,
                               store.ledger.active)
-        return f"{len(rows)} character(s)"
+        pruned = retention.tidy_snapshots(s)
+        return f"{len(rows)} character(s)" + (f", removed {pruned} old snapshot(s)" if pruned else "")
     return step
 
 

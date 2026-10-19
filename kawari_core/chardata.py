@@ -261,6 +261,46 @@ def list_snapshots(config_dir: Path, content_id: int) -> list[dict]:
     return out
 
 
+def delete_snapshots(config_dir: Path, content_id: int, names) -> list[str]:
+    """Delete these snapshots of one character (by file name); anything else is ignored."""
+    folder = history_dir(config_dir, content_id)
+    wanted = set(names)
+    removed = []
+    if not folder.exists():
+        return removed
+    for f in folder.glob("*.json"):
+        if f.name in wanted:
+            try:
+                f.unlink()
+                removed.append(f.name)
+            except OSError:
+                pass
+    return removed
+
+
+def prune_snapshots(config_dir: Path, content_id: int, keep: int) -> list[str]:
+    """Keep one character's newest `keep` snapshots, delete the rest."""
+    folder = history_dir(config_dir, content_id)
+    if not folder.exists():
+        return []
+    names = [f.name for f in sorted(folder.glob("*.json"), reverse=True)]
+    return delete_snapshots(config_dir, content_id, names[keep:])
+
+
+def snapshot_usage(config_dir: Path) -> dict[int, tuple[int, int]]:
+    """Every character with snapshots: content ID -> (how many, bytes)."""
+    root = Path(config_dir) / "characters"
+    usage = {}
+    if not root.exists():
+        return usage
+    for folder in root.iterdir():
+        if folder.is_dir() and folder.name.isdigit():
+            files = list(folder.glob("*.json"))
+            if files:
+                usage[int(folder.name)] = (len(files), sum(f.stat().st_size for f in files))
+    return usage
+
+
 def diff_rows(a: dict, b: dict) -> list[str]:
     """Describe the difference between two row sets (a = older, b = newer)."""
     lines = []

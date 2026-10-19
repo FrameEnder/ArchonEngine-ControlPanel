@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.15.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.16.0.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -216,6 +216,16 @@ client-version checks, the full `config.yaml` editor, database health and
 migration, backups, account creation and admin promotion, Auracite import and
 export, branding, quest progress, marketboard prices, and container logs. Non-admins get a 403 on every dashboard
 route, including the POST actions, not just a hidden nav link.
+
+**Storage limits** (Dashboard → Database) — every update and build switch backs up both
+databases and snapshots every character, and every edit, sync and import snapshots that
+character, so without a limit they fill the disk a little more with each update. Kawari
+Web keeps the newest 20 backups and the newest 30 snapshots per character (change them
+there; 0 keeps everything) and deletes the oldest whenever a new one is made. A backup
+that a build still on disk would restore when you switch back to it is never deleted
+automatically. Old builds beyond **Builds to keep** (Updates → Update settings) are
+removed at the end of every install. Backups and a character's snapshots can also be
+ticked and deleted together.
 
 **Branding** — server name, tagline, emoji favicon, logo, accent colour, light or
 dark theme, footer text, and the Home page links.
@@ -589,9 +599,9 @@ Everything from the desktop app is here:
 | Tracking a fork on GitHub, Codeberg or Gitea/Forgejo; installing a specific commit (web only) | Dashboard → Updates |
 | Every `config.yaml` key | Dashboard → Server config |
 | Schema health, migration, accounts, Auracite import/export | Dashboard → Database |
-| Backups: create, download, restore, delete, prune to the newest N | Dashboard → Database |
+| Backups: create, download, restore, delete (one or ticked), prune to the newest N, a kept-backups limit applied automatically | Dashboard → Database |
 | Builds: switch, pin, delete, prune | Dashboard → Updates |
-| Character snapshots: diff, restore, delete | Dashboard → a character |
+| Character snapshots: diff, restore, delete (one or ticked), a per-character limit applied automatically | Dashboard → a character |
 | Full character editor: identity, location, classes, currency, Grand Company, unlocks, chocobo, social, snapshots, delete | Dashboard → Database → a character |
 | Branding, logs | Dashboard → Branding / Logs |
 

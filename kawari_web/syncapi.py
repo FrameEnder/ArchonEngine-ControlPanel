@@ -28,7 +28,7 @@ from flask import Blueprint, current_app, g, jsonify, redirect, request, url_for
 
 from kawari_core import auracite, chardata
 
-from . import auth, webdb
+from . import auth, retention, webdb
 
 api = Blueprint("api", __name__)
 
@@ -172,6 +172,7 @@ def sync():
     sections = sync_sections(db, user_id)
     try:
         chardata.snapshot(settings.data_dir, settings.world_db, content_id, "pre-sync")
+        retention.tidy_snapshots(settings, content_id)
         character = chardata.load(settings.world_db, content_id)
         changes, notes = auracite.build_changes(character, dump, sections)
         auracite.apply_changes(character, changes)

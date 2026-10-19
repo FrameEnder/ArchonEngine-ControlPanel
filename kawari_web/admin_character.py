@@ -16,7 +16,7 @@ from kawari_core import chardata, constants as C
 from kawari_core import gamedata as G
 from kawari_core.versions import BuildStore
 
-from . import auth
+from . import auth, retention
 from .admin_base import dashboard, podman, settings
 
 
@@ -71,6 +71,7 @@ def character(content_id: int):
         buddy_levels=ch.get_json("buddy", "levels", [0, 0, 0]),
         favourites=ch.get_json("aetheryte", "favorite_aetherytes", []),
         snapshots=chardata.list_snapshots(s.data_dir, content_id),
+        keep_snapshots=retention.keep_snapshots(s),
         online=chardata.is_online(s.world_db, content_id),
         server_running=_server_running())
 
@@ -96,6 +97,7 @@ def _commit(ch, content_id: int, label: str) -> str:
     s = settings()
     store = BuildStore(s.data_dir)
     chardata.snapshot(s.data_dir, s.world_db, content_id, label, store.ledger.active)
+    retention.tidy_snapshots(s, content_id)
     delta = chardata.save(s.world_db, ch)
     return f"{sum(len(v) for v in delta.values())} column(s) across {len(delta)} table(s)"
 
@@ -280,7 +282,8 @@ def snapshot_character(content_id: int):
     label = (request.form.get("label") or "manual").strip()[:40]
     store = BuildStore(s.data_dir)
     chardata.snapshot(s.data_dir, s.world_db, content_id, label, store.ledger.active)
-    flash("Snapshot taken.", "ok")
+    pruned = retention.tidy_snapshots(s, content_id)
+    flash("Snapshot taken." + (f" Removed {pruned} old snapshot(s) beyond the limit." if pruned else ""), "ok")
     return redirect(url_for("dashboard.character", content_id=content_id))
 
 
@@ -306,8 +309,23 @@ def restore_snapshot(content_id: int):
     except Exception as exc:                            # noqa: BLE001
         flash(f"Restore failed: {exc}", "err")
         return redirect(url_for("dashboard.character", content_id=content_id))
+    retention.tidy_snapshots(s, content_id)
     flash(f"Restored {len(tables)} table(s) from {match['taken_at']}.", "ok")
     return redirect(url_for("dashboard.character", content_id=content_id))
+
+
+@dashboard.route("/character/<int:content_id>/snapshots/delete", methods=["POST"])
+@auth.admin_required
+def delete_snapshots(content_id: int):
+    """Delete the snapshots ticked in the list."""
+    s = settings()
+    names = request.form.getlist("names")
+    if not names:
+        flash("Tick the snapshots to delete first.", "err")
+    else:
+        removed = chardata.delete_snapshots(s.data_dir, content_id, names)
+        flash(f"Deleted {len(removed)} snapshot(s).", "ok")
+    return redirect(url_for("dashboard.character", content_id=content_id) + "#history")
 
 
 @dashboard.route("/character/<int:content_id>/snapshot/delete", methods=["POST"])
@@ -354,6 +372,7 @@ def delete_character(content_id: int):
     chardata.snapshot(s.data_dir, s.world_db, content_id, "before-delete",
                       store.ledger.active)
     ok, error = chardata.delete_character(s.world_db, content_id)
+    retention.tidy_backups(s)
     flash("Character deleted. A backup and snapshot were taken first." if ok
           else f"Delete failed: {error}", "ok" if ok else "err")
     return redirect(url_for("dashboard.database"))

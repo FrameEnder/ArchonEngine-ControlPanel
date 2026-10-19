@@ -52,11 +52,19 @@
       <button class="btn">Create backup</button>
     </form>
 
+    <form method="post" id="backups-bulk" action="{{ url_for('dashboard.delete_backups') }}"
+          onsubmit="return confirm('Permanently delete the ticked backups?')">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    </form>
     <table class="grid">
-      <tr><th>Archive</th><th>Taken</th><th>Size</th><th></th></tr>
+      <tr><th><input type="checkbox" data-check-all="names" title="Tick all" aria-label="Tick all"></th>
+          <th>Archive</th><th>Taken</th><th>Size</th><th></th></tr>
       {% for b in backups %}
       <tr>
-        <td class="mono small">{{ b.name }}</td>
+        <td><input type="checkbox" name="names" value="{{ b.name }}" form="backups-bulk"
+                   aria-label="Tick {{ b.name }}"></td>
+        <td class="mono small">{{ b.name }}{% if b.name in protected_backups %}
+            <span class="dim" title="A build on disk restores this when switched back to; never pruned automatically">(kept for a build)</span>{% endif %}</td>
         <td class="dim">{{ b.when }}</td>
         <td class="dim mono small">{{ (b.size / 1048576) | round(1) }} MB</td>
         <td class="rowactions">
@@ -75,8 +83,11 @@
           </form>
         </td>
       </tr>
-      {% else %}<tr><td colspan="4" class="dim">No backups yet.</td></tr>{% endfor %}
+      {% else %}<tr><td colspan="5" class="dim">No backups yet.</td></tr>{% endfor %}
     </table>
+    {% if backups %}
+    <button class="btn small danger" form="backups-bulk">Delete ticked</button>
+    {% endif %}
 
     <form method="post" action="{{ url_for('dashboard.prune_backups') }}" class="inline"
           onsubmit="return confirm('Delete all but the newest backups?')">
@@ -86,6 +97,23 @@
     </form>
     <p class="hint">Restoring stops nothing by itself - stop the server first, or the
        restore is refused.</p>
+  </section>
+
+  <section class="card" id="retention">
+    <h2>Storage limits</h2>
+    <p class="dim small">Backups: {{ storage.backups }} archive(s), {{ (storage.backup_bytes / 1048576) | round(1) }} MB.
+       Character snapshots: {{ storage.snapshots }} for {{ storage.snapshot_characters }} character(s),
+       {{ (storage.snapshot_bytes / 1048576) | round(1) }} MB. Builds have their own limit (Updates, Update settings),
+       applied after every install.</p>
+    <form method="post" action="{{ url_for('dashboard.save_retention') }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label>Backups to keep <input type="number" name="keep_backups" value="{{ keep_backups }}" min="0" max="500" class="tiny"></label>
+      <label>Snapshots to keep per character <input type="number" name="keep_snapshots" value="{{ keep_snapshots }}" min="0" max="500" class="tiny"></label>
+      <button class="btn">Save and apply</button>
+    </form>
+    <p class="hint">Whenever a backup or snapshot is made (updates, switches, edits, syncs, imports), the oldest
+       beyond these are deleted. 0 keeps everything. A backup a build on disk would restore when switched back to
+       is never deleted automatically.</p>
   </section>
 </div>
 
