@@ -383,21 +383,34 @@ def prune_backups():
     return redirect(url_for("dashboard.database"))
 
 
+@dashboard.route("/announcements")
+@auth.admin_required
+def announcements():
+    settings = _settings()
+    return render_template("dashboard/announcements.html", section="announcements",
+                           sent=webdb.announcements(settings.webapp_db),
+                           accounts=len(webdb.all_profiles(settings.webapp_db)))
+
+
 @dashboard.route("/announce", methods=["POST"])
 @auth.admin_required
 def announce():
-    """Send a notification to every account."""
+    """Send a notification to every account, and keep a record of it."""
     settings = _settings()
+    back = (url_for("dashboard.overview") if request.form.get("back") == "overview"
+            else url_for("dashboard.announcements"))
     title = (request.form.get("title") or "").strip()[:120]
     body = (request.form.get("body") or "").strip()[:500]
     if not title:
         flash("An announcement needs a title.", "err")
-        return redirect(url_for("dashboard.overview"))
+        return redirect(back)
+    accounts = len(webdb.all_profiles(settings.webapp_db))
     sent = webdb.notify_all(settings.webapp_db, "announcement", title, body,
                             url_for("social.notifications"))
+    webdb.record_announcement(settings.webapp_db, title, body, g.user["user_id"], sent, accounts)
     flash(f"Announcement sent to {sent} account(s). Anyone who turned announcements "
           f"off did not receive it.", "ok")
-    return redirect(url_for("dashboard.overview"))
+    return redirect(back)
 
 
 @dashboard.route("/accounts/create", methods=["POST"])
@@ -527,8 +540,14 @@ def job(job_id: str):
     if not found:
         flash("That job is no longer available.", "info")
         return redirect(url_for("dashboard.overview"))
-    return render_template("dashboard/job.html", section=request.args.get("back", "setup"),
-                           job=found.as_dict(), back=request.args.get("back", "setup"))
+    back = request.args.get("back", "setup")
+    # Where Back goes: a dashboard page by name, or the shop's management page.
+    endpoints = {"shop": "shop.manage"}
+    endpoint = endpoints.get(back, f"dashboard.{back}")
+    if endpoint not in current_app.view_functions:
+        back, endpoint = "setup", "dashboard.setup"
+    return render_template("dashboard/job.html", section=back, job=found.as_dict(),
+                           back=back, back_url=url_for(endpoint))
 
 
 @dashboard.route("/job/<job_id>.json")

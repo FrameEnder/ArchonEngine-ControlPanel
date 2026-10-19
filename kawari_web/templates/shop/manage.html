@@ -38,6 +38,7 @@
 </form>
 </div>
 
+<div class="cols shop-manage-data">
 <section class="card">
   <h2>Game items</h2>
   <p class="dim">Listings deliver real game items, linked by name to the item list from your game install
@@ -75,8 +76,29 @@
   {% endif %}
 </section>
 
+<section class="card" id="icons">
+  <h2>Item icons</h2>
+  <p class="dim">Each listing's picture in the shop is its first item's icon, unless the listing has an uploaded cover.
+     The icons come from the server's own game install (kawari-questdump extracts them), so nothing is downloaded
+     from outside. Fetch them again after a game update.</p>
+  {% if index %}
+    <p><b>{{ '{:,}'.format(icon_report.have) }}</b> of {{ '{:,}'.format(icon_report.wanted) }} item icons the listings use are fetched.</p>
+  {% else %}
+    <p class="warn-inline">Read the item list first: the icons are found through it.</p>
+  {% endif %}
+  <form method="post" class="rowactions">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="action" value="icons">
+    <label class="inline"><input type="checkbox" name="refresh"> Fetch them all again</label>
+    <button class="btn accent" {{ 'disabled' if not (tool.ok and index) }}>Fetch item icons</button>
+  </form>
+  {% if not tool.ok %}<p class="line err">{{ tool.reason }}</p>{% endif %}
+</section>
+</div>
+
 <section class="card">
   <h2>{{ coin_name }} balances</h2>
+  <div class="table-wrap">
   <table class="grid">
     <tr><th>Account</th><th>Balance</th><th>Earned in total</th><th>Adjust</th></tr>
     {% for p in profiles %}
@@ -98,12 +120,14 @@
     </tr>
     {% endfor %}
   </table>
+  </div>
   <p class="dim small">A balance appears once the account opens the shop. Adjusting it opens it now.</p>
 </section>
 
 <section class="card">
   <h2>Recent purchases</h2>
   {% if recent %}
+  <div class="table-wrap">
   <table class="grid small">
     <tr><th>When</th><th>Listing</th><th>Character</th><th>Paid</th></tr>
     {% for p in recent %}
@@ -111,6 +135,7 @@
         <td>{{ '{:,}'.format(p.price) }} {{ 'gil' if p.currency == 'gil' else coin_name }}</td></tr>
     {% endfor %}
   </table>
+  </div>
   {% else %}<p class="dim">None yet.</p>{% endif %}
 </section>
 

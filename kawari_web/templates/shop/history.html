@@ -1,22 +1,54 @@
 {% extends "base.html" %}
 {% block title %}Your purchases · Shop · {{ branding.site_name }}{% endblock %}
 {% block content %}
-<p class="crumbs small"><a href="{{ url_for('shop.browse') }}">Shop</a></p>
-<h1>Your purchases</h1>
-{% include "shop/_wallet.html" %}
-<section class="card">
+<nav class="shop-crumbs" aria-label="Breadcrumb">
+  <a href="{{ url_for('shop.browse') }}">Shop</a>
+  <span class="shop-crumb-sep" aria-hidden="true">›</span>
+  <span aria-current="page">Your purchases</span>
+</nav>
+<div class="page-head">
+  <div>
+    <h1>Your purchases</h1>
+    <p>Everything you've bought, and where it went.</p>
+  </div>
+  <a class="btn" href="{{ url_for('shop.browse') }}">Back to the shop</a>
+</div>
+
+{% if purchases %}
+{% set coins_spent = purchases|selectattr('currency', 'ne', 'gil')|sum(attribute='price') %}
+{% set gil_spent = purchases|selectattr('currency', 'eq', 'gil')|sum(attribute='price') %}
+<section class="stats shop-totals" aria-label="Totals">
+  <div class="stat"><div class="label">{{ coin_name }} spent</div><div class="value shop-coin-text">{{ '{:,}'.format(coins_spent) }}</div></div>
+  <div class="stat"><div class="label">Gil spent</div><div class="value gil-text">{{ '{:,}'.format(gil_spent) }}</div></div>
+  <div class="stat"><div class="label">Purchases</div><div class="value">{{ purchases|length }}</div>
+    {% if purchases|length >= 200 %}<div class="sub">The latest 200</div>{% endif %}</div>
+</section>
+{% endif %}
+
+{% with wallet_links=false, wallet_strip=true %}{% include "shop/_wallet.html" %}{% endwith %}
+
+<section class="card flush shop-history" aria-label="Purchases">
   {% if purchases %}
-  <table class="grid">
-    <tr><th>When</th><th>Listing</th><th>Delivered to</th><th>Paid</th></tr>
-    {% for p in purchases %}
-    <tr>
-      <td class="small mono">{{ p.created_at }}</td>
-      <td><a href="{{ url_for('shop.item', listing_id=p.listing_id) }}">{{ p.listing }}</a></td>
-      <td>{{ p.character }}</td>
-      <td>{{ '{:,}'.format(p.price) }} {{ 'gil' if p.currency == 'gil' else coin_name }}</td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% else %}<p class="dim">Nothing bought yet.</p>{% endif %}
+  <div class="table-wrap">
+    <table class="grid">
+      <thead><tr><th scope="col">When</th><th scope="col">Listing</th><th scope="col">Delivered to</th><th scope="col" class="shop-num">Paid</th></tr></thead>
+      <tbody>
+      {% for p in purchases %}
+      <tr>
+        <td class="small mono dim shop-when">{{ p.created_at }}</td>
+        <td><a href="{{ url_for('shop.item', listing_id=p.listing_id) }}">{{ p.listing }}</a></td>
+        <td>{{ p.character }}</td>
+        <td class="shop-num {{ 'gil-text' if p.currency == 'gil' else 'shop-coin-text' }}">{{ '{:,}'.format(p.price) }} {{ 'gil' if p.currency == 'gil' else coin_name }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="shop-history-empty">
+    <p class="dim">Nothing bought yet.</p>
+    <a class="btn" href="{{ url_for('shop.browse') }}">Browse the shop</a>
+  </div>
+  {% endif %}
 </section>
 {% endblock %}

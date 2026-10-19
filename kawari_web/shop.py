@@ -4,11 +4,14 @@ kawari_core.shop."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from flask import (
-    Blueprint, abort, current_app, flash, g, redirect, render_template, request, session, url_for,
+    Blueprint, abort, current_app, flash, g, redirect, render_template, request,
+    send_from_directory, session, url_for,
 )
 
-from kawari_core import chardata
+from kawari_core import chardata, icons
 from kawari_core import shop as S
 
 from . import auth, webdb
@@ -84,6 +87,53 @@ def _is_admin() -> bool:
 
 
 # ════════════════════════════════════════════════════════════════════════════
+#  Pictures
+# ════════════════════════════════════════════════════════════════════════════
+def _icons_dir() -> Path:
+    """Game icons turned into PNGs (Fetch item icons). Never in git: they come
+    from the server's own game install."""
+    return _settings().web_dir / "item-icons"
+
+
+def _icon_url(icon_id: int) -> str:
+    if icon_id and (_icons_dir() / f"{icon_id}.png").exists():
+        return url_for("shop.icon", icon_id=icon_id)
+    return ""
+
+
+def _pictures(listings: list) -> dict[int, dict]:
+    """{listing id: {"thumb": url or "", "icon": url or ""}} for linked listings.
+
+    The thumbnail is the cover upload when there is one, else the game icon."""
+    s = _settings()
+    covers = S.covers(s.webapp_db, [item.id for item in listings])
+    out = {}
+    for item in listings:
+        icon = _icon_url(S.icon_of(item))
+        cover = covers.get(item.id)
+        out[item.id] = {
+            "thumb": url_for("main.static_upload", name=cover) if cover else icon,
+            "icon": icon,
+            "cover": bool(cover),
+        }
+    return out
+
+
+@shop.route("/icon/<int:icon_id>.png")
+def icon(icon_id: int):
+    return send_from_directory(_icons_dir(), f"{icon_id}.png", max_age=7 * 24 * 3600)
+
+
+def _delete_upload(name: str) -> None:
+    if not name or "/" in name or name.startswith("."):
+        return
+    try:
+        (_settings().uploads / name).unlink()
+    except OSError:
+        pass
+
+
+# ════════════════════════════════════════════════════════════════════════════
 #  Browsing and buying
 # ════════════════════════════════════════════════════════════════════════════
 @shop.route("/")
@@ -105,7 +155,7 @@ def browse():
     shown = [index.link_listing(item) for item in rows[(page - 1) * PAGE_SIZE: page * PAGE_SIZE]]
     return render_template("shop/browse.html", listings=shown, count=len(rows), page=page,
                            pages=pages, category=category, query=query, index_ready=bool(index),
-                           **ctx)
+                           pictures=_pictures(shown), **ctx)
 
 
 @shop.route("/character", methods=["POST"])
@@ -129,7 +179,11 @@ def item(listing_id: int):
     if not listing or (not listing.visible and not _is_admin()):
         abort(404)
     _index().link_listing(listing)
-    return render_template("shop/item.html", listing=listing, **_context())
+    pictures = _pictures([listing])[listing.id]
+    gallery = [url_for("main.static_upload", name=img["file"])
+               for img in S.images(s.webapp_db, listing.id)]
+    return render_template("shop/item.html", listing=listing, pictures=pictures, gallery=gallery,
+                           **_context())
 
 
 @shop.route("/item/<int:listing_id>/buy", methods=["POST"])
@@ -218,6 +272,8 @@ def edit(listing_id: int):
     index = _index()
     index.link_listing(listing)
     return render_template("shop/edit.html", listing=listing,
+                           images=S.images(s.webapp_db, listing.id),
+                           pictures=_pictures([listing])[listing.id], max_images=S.MAX_IMAGES,
                            contents_text=S.contents_to_text(listing.contents),
                            search=index.search(request.args.get("find", "")),
                            find=request.args.get("find", ""), index_ready=bool(index),
@@ -235,7 +291,50 @@ def new():
     blank = S.Listing(0, request.args.get("category", ""), "", "", [], 1, 1, True, True, True,
                       "", "", "")
     return render_template("shop/edit.html", listing=blank, contents_text="", search=[], find="",
-                           index_ready=bool(_index()), **_context())
+                           images=[], pictures={"thumb": "", "icon": "", "cover": False},
+                           max_images=S.MAX_IMAGES, index_ready=bool(_index()), **_context())
+
+
+@shop.route("/item/<int:listing_id>/images", methods=["POST"])
+@auth.admin_required
+def add_images(listing_id: int):
+    from .app import _save_upload
+    s = _settings()
+    if not S.get(s.webapp_db, listing_id):
+        abort(404)
+    room = S.MAX_IMAGES - len(S.images(s.webapp_db, listing_id))
+    files = [f for f in request.files.getlist("images") if f and f.filename]
+    if not files:
+        flash("Choose one or more images to add.", "err")
+    elif room <= 0:
+        flash(f"A listing can have {S.MAX_IMAGES} images; remove one first.", "err")
+    else:
+        added = 0
+        for file_storage in files[:room]:
+            name = _save_upload(s, file_storage)
+            if name:
+                S.add_image(s.webapp_db, listing_id, name)
+                added += 1
+        skipped = len(files) - min(len(files), room)
+        if added:
+            flash(f"Added {added} image(s)." + (f" {skipped} left out: a listing can have "
+                                                f"{S.MAX_IMAGES}." if skipped else ""), "ok")
+    return redirect(url_for("shop.edit", listing_id=listing_id) + "#pictures")
+
+
+@shop.route("/item/<int:listing_id>/images/<int:image_id>/<action>", methods=["POST"])
+@auth.admin_required
+def image_action(listing_id: int, image_id: int, action: str):
+    s = _settings()
+    if action == "cover":
+        S.make_cover(s.webapp_db, listing_id, image_id)
+        flash("That image is the cover now.", "ok")
+    elif action == "delete":
+        _delete_upload(S.remove_image(s.webapp_db, listing_id, image_id))
+        flash("Image removed.", "ok")
+    else:
+        abort(404)
+    return redirect(url_for("shop.edit", listing_id=listing_id) + "#pictures")
 
 
 @shop.route("/item/<int:listing_id>/delete", methods=["POST"])
@@ -244,7 +343,10 @@ def delete(listing_id: int):
     s = _settings()
     listing = S.get(s.webapp_db, listing_id)
     if listing:
+        files = S.all_image_files(s.webapp_db, listing_id)
         S.delete(s.webapp_db, listing_id)
+        for name in files:
+            _delete_upload(name)
         flash(f"Deleted {listing.name}.", "ok")
         return redirect(url_for("shop.browse", category=listing.category))
     return redirect(url_for("shop.browse"))
@@ -265,6 +367,75 @@ def _tool_status() -> dict:
         except OSError:
             pass
     return status
+
+
+def _icon_ids(include_existing: bool) -> list[int]:
+    """The game icons the shop's listings stand for."""
+    index = _index()
+    ids = set()
+    for listing in S.listings(_settings().webapp_db, include_hidden=True):
+        icon_id = S.icon_of(index.link_listing(listing))
+        if icon_id:
+            ids.add(icon_id)
+    if not include_existing:
+        ids = {i for i in ids if not (_icons_dir() / f"{i}.png").exists()}
+    return sorted(ids)
+
+
+def icon_report() -> dict:
+    """How many of the listings' icons have been fetched."""
+    wanted = _icon_ids(include_existing=True)
+    have = sum(1 for i in wanted if (_icons_dir() / f"{i}.png").exists())
+    return {"wanted": len(wanted), "have": have}
+
+
+def _start_icon_job():
+    """Extract the listings' icons with kawari-questdump, then convert them to PNG."""
+    import shutil
+
+    from .admin_base import runner
+    from .questlab import _root, _run_step
+    status = _tool_status()
+    if not status.get("ok"):
+        flash(status.get("reason") or "kawari-questdump can't run.", "err")
+        return None
+    if not _index():
+        flash("Read the item list from the game first: the icons are found through it.", "err")
+        return None
+    refresh = request.form.get("refresh") == "on"
+    wanted = _icon_ids(include_existing=refresh)
+    if not wanted:
+        flash("Every listing's icon is already here. Tick “Fetch them all again” to refresh them.",
+              "ok")
+        return None
+    paths = [path for icon_id in wanted for path in icons.game_paths(icon_id)]
+    raw = _root() / "item-icons-tex"
+    destination = _icons_dir()
+
+    def prepare(job):
+        shutil.rmtree(raw, ignore_errors=True)
+        job.say(f"{len(wanted)} icon(s) to fetch")
+        return "ready"
+
+    def convert(job):
+        written, problems = icons.convert_folder(raw, destination)
+        for line in problems[:20]:
+            job.say(f"couldn't read {line}")
+        shutil.rmtree(raw, ignore_errors=True)
+        if not written:
+            raise RuntimeError("no icon could be converted - see the log above")
+        return f"{written} icon(s) saved"
+
+    try:
+        return runner().start(f"Fetch {len(wanted)} item icon(s)", [
+            ("Get ready", prepare),
+            ("Extract the icons from the game", _run_step(["extract", *paths],
+                                                         out_sub="item-icons-tex")),
+            ("Turn them into pictures", convert),
+        ])
+    except RuntimeError as exc:
+        flash(str(exc), "err")
+        return None
 
 
 @shop.route("/manage", methods=["GET", "POST"])
@@ -310,8 +481,15 @@ def manage():
             if f.get("confirm") != "RESET":
                 flash("Type RESET to replace every listing with the original catalogue.", "err")
             else:
+                files = S.all_image_files(s.webapp_db)
                 count = S.reseed(s.webapp_db)
+                for name in files:
+                    _delete_upload(name)
                 flash(f"The shop has its {count} original listings again (prices back to 1).", "ok")
+        elif action == "icons":
+            job = _start_icon_job()
+            if job:
+                return redirect(url_for("dashboard.job", job_id=job.id, back="shop"))
         elif action == "index":
             from .admin_base import runner
             from .questlab import _run_step
@@ -328,12 +506,13 @@ def manage():
                 except RuntimeError as exc:
                     flash(str(exc), "err")
                     return redirect(url_for("shop.manage"))
-                return redirect(url_for("dashboard.job", job_id=job.id))
+                return redirect(url_for("dashboard.job", job_id=job.id, back="shop"))
         return redirect(url_for("shop.manage"))
 
     index = _index()
     profiles = webdb.all_profiles(s.webapp_db)
     wallets = S.wallets(s.webapp_db)
     return render_template("shop/manage.html", report=S.link_report(s.webapp_db, index),
+                           icon_report=icon_report() if index else {"wanted": 0, "have": 0},
                            index=index, tool=_tool_status(), profiles=profiles, wallets=wallets,
                            recent=S.purchases(s.webapp_db, None, 30), **_context())

@@ -1,55 +1,84 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block title %}First-run setup{% endblock %}
 {% block content %}
-<section class="card">
+<section class="fr-intro">
+  <span class="pill warn fr-badge"><span class="dot warn"></span>First-run setup</span>
   <h1>Welcome</h1>
-  <p>No account has administrator access yet. Choose how to start; the first
-     administrator can promote others afterwards.</p>
+  <p>No account has administrator access yet. Pick one of the two ways to start below. The
+     first administrator can promote others afterwards.</p>
 </section>
 
-<section class="card">
-  <h2>Import the accounts already on this server</h2>
-  {% if existing %}
-    <p class="dim">Found {{ existing|length }} account(s) in <code>{{ login_db }}</code>.
-       Every one gets a profile; pick which is the administrator. Passwords stay
-       exactly as they are - sign in with the game password.</p>
-    <form method="post">
-    <input type="hidden" name="csrf" value="{{ csrf_token }}">
-      <input type="hidden" name="action" value="adopt">
-      <table class="grid">
-        <tr><th></th><th>Account</th><th>User ID</th></tr>
-        {% for acct in existing %}
-        <tr>
-          <td><input type="radio" name="user_id" value="{{ acct.id }}" {{ 'checked' if loop.first }}></td>
-          <td>{{ acct.username }}</td><td class="mono dim">{{ acct.id }}</td>
-        </tr>
-        {% endfor %}
-      </table>
-      <button class="btn accent" type="submit">Import and set administrator</button>
+<div class="fr-choices">
+  <section class="card fr-choice" aria-labelledby="import-h">
+    <div class="fr-choicehead">
+      <span class="fr-icon">{{ icon('download') }}</span>
+      <div>
+        <div class="entry-eyebrow">Option 1</div>
+        <h2 id="import-h">Import the accounts already on this server</h2>
+      </div>
+    </div>
+    {% if existing %}
+      <p class="dim">Found <b class="fr-strong">{{ existing|length }} account{{ '' if existing|length == 1 else 's' }}</b>
+         in <code class="fr-code">{{ login_db }}</code>. Every one gets a profile; pick which is the
+         administrator. Passwords stay exactly as they are: sign in with the game password.</p>
+      <form method="post" class="fr-form">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <input type="hidden" name="action" value="adopt">
+        <fieldset class="fr-fieldset">
+          <legend class="visually-hidden">Administrator account</legend>
+          <div class="table-wrap fr-tablewrap">
+            <table class="grid fr-table">
+              <thead><tr><th scope="col">Admin</th><th scope="col">Account</th><th scope="col">User ID</th></tr></thead>
+              <tbody>
+                {% for acct in existing %}
+                <tr>
+                  <td><label class="fr-radio">
+                    <input type="radio" name="user_id" value="{{ acct.id }}" {{ 'checked' if loop.first }}>
+                    <span class="visually-hidden">Make {{ acct.username }} the administrator</span>
+                  </label></td>
+                  <td class="fr-name">{{ acct.username }}</td>
+                  <td class="mono dim">{{ acct.id }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </fieldset>
+        <button class="btn accent big fr-submit" type="submit">Import and set administrator</button>
+      </form>
+    {% else %}
+      <p class="dim">
+        {% if login_db_exists %}<code class="fr-code">{{ login_db }}</code> exists but has no accounts in it yet.
+        {% else %}No <code class="fr-code">login.db</code> at <code class="fr-code">{{ login_db }}</code> yet: it is
+        created the first time the server runs, or by creating the first account (option 2).{% endif %}
+      </p>
+    {% endif %}
+  </section>
+
+  <section class="card fr-choice" aria-labelledby="create-h">
+    <div class="fr-choicehead">
+      <span class="fr-icon">{{ icon('users') }}</span>
+      <div>
+        <div class="entry-eyebrow">Option 2</div>
+        <h2 id="create-h">Or create the first account</h2>
+      </div>
+    </div>
+    <p class="dim">Creates a real Kawari account (a user plus its service account), so it works
+       in the game client as well as here.</p>
+    <form method="post" class="entry-form fr-form">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="action" value="create">
+      <label>Username <input name="username" autocomplete="username" required></label>
+      <label>Password <input name="password" type="password" autocomplete="new-password" required></label>
+      <label>Confirm password <input name="confirm" type="password" autocomplete="new-password" required></label>
+      <div class="callout warn entry-callout" role="note">
+        {{ icon('warn', 'icon sm') }}
+        <p>Kawari stores passwords in plain text and compares them literally. Anyone who can read
+           <code>login.db</code> can read this password, so do not reuse one from elsewhere.</p>
+      </div>
+      <button class="btn {{ 'big' if existing else 'accent big' }} fr-submit" type="submit">Create administrator account</button>
     </form>
-  {% else %}
-    <p class="dim">
-      {% if login_db_exists %}<code>{{ login_db }}</code> exists but has no accounts in it yet.
-      {% else %}No <code>login.db</code> at <code>{{ login_db }}</code> yet - it is created
-      the first time the server runs, or by creating an account below.{% endif %}
-    </p>
-  {% endif %}
-</section>
-
-<section class="card">
-  <h2>Or create the first account</h2>
-  <p class="dim">Creates a real Kawari account - a user plus its service account -
-     so it works in the game client as well as here.</p>
-  <form method="post">
-    <input type="hidden" name="csrf" value="{{ csrf_token }}">
-    <input type="hidden" name="action" value="create">
-    <label>Username <input name="username" required></label>
-    <label>Password <input name="password" type="password" required></label>
-    <label>Confirm <input name="confirm" type="password" required></label>
-    <p class="warn-inline">Kawari stores passwords in plain text and compares them
-       literally. Anyone who can read <code>login.db</code> can read this password,
-       so do not reuse one from elsewhere.</p>
-    <button class="btn accent" type="submit">Create administrator account</button>
-  </form>
-</section>
+  </section>
+</div>
 {% endblock %}

@@ -88,11 +88,13 @@
   </section>
 
   <section class="card" id="announce">
-    <h2>Announce something</h2>
+    <div class="card-head"><h2>Announce something</h2>
+      <a class="small" href="{{ url_for('dashboard.announcements') }}">All announcements</a></div>
     <p class="dim">Sends a notification to every account. Anyone who has turned
        announcements off in their settings will not receive it.</p>
     <form method="post" action="{{ url_for('dashboard.announce') }}">
       <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="back" value="overview">
       <label>Title <input name="title" maxlength="120" required
              placeholder="Maintenance at 9pm"></label>
       <label>Details <textarea name="body" rows="3" maxlength="500"

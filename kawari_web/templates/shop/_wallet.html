@@ -1,32 +1,43 @@
-{# The buyer's character, gil and coins, on every shop page. #}
-<section class="card wallet-bar">
+{#- The buyer's character, gil and coins, on every shop page.
+    Include it inside {% with %} to change how it looks:
+      wallet_links=false  leaves out the links cell (the page shows them in its heading);
+      wallet_strip=true   one compact row (Your purchases). -#}
+{%- set _links = wallet_links if wallet_links is defined else true -%}
+{%- set _strip = wallet_strip if wallet_strip is defined else false -%}
+<section class="card wallet-bar shop-wallet {{ 'is-strip' if _strip }}" aria-label="Wallet">
   {% if user %}
     {% if characters %}
     <form method="post" action="{{ url_for('shop.pick_character') }}" class="wallet-pick">
       <input type="hidden" name="csrf" value="{{ csrf_token }}">
       <input type="hidden" name="back" value="{{ request.full_path }}">
-      <label>Deliver to
-        <select name="content_id" data-autosubmit>
+      <label for="shop-deliver">Deliver to</label>
+      <div class="shop-pick-row">
+        <select id="shop-deliver" name="content_id" data-autosubmit>
           {% for ch in characters %}
           <option value="{{ ch.content_id }}" {{ 'selected' if selected and ch.content_id == selected.content_id }}>{{ ch.name }}</option>
           {% endfor %}
         </select>
-      </label>
-      <noscript><button class="btn small">Choose</button></noscript>
+        <noscript><button class="btn small">Choose</button></noscript>
+      </div>
     </form>
     <div class="wallet-figure gil">
-      <span class="dim small">Gil</span>
-      <b>{{ '{:,}'.format(gil) if gil is not none else '—' }}</b>
-      {% if online %}<span class="pill small warn-pill" title="Gil can only be spent while this character is logged out">logged in</span>{% endif %}
+      <span class="shop-wallet-label">Gil{% if selected and not _strip %} on {{ selected.name }}{% endif %}</span>
+      <span class="shop-wallet-value">
+        <b>{{ '{:,}'.format(gil) if gil is not none else '—' }}</b>
+        {% if online %}<span class="pill small warn" title="Gil can only be spent while this character is logged out"><span class="dot warn" aria-hidden="true"></span>Logged in</span>{% endif %}
+      </span>
+      {% if not _strip %}<span class="shop-wallet-sub">Spendable only while logged out</span>{% endif %}
     </div>
     {% else %}
-    <p class="dim">You have no characters yet. Make one in the game to have purchases delivered.</p>
+    <p class="dim shop-wallet-none">You have no characters yet. Make one in the game to have purchases delivered.</p>
     {% endif %}
     <div class="wallet-figure coins">
-      <span class="dim small">{{ coin_name }}</span>
-      <b>{{ '{:,}'.format(wallet.balance) if wallet else 0 }}</b>
-      <span class="dim small">+{{ cfg.shop_coins_per_hour }} per hour played</span>
+      <span class="shop-wallet-label">{{ coin_name }}</span>
+      <span class="shop-wallet-value"><b>{{ '{:,}'.format(wallet.balance) if wallet else 0 }}</b>
+        {% if _strip %}<span class="shop-wallet-sub">+{{ cfg.shop_coins_per_hour }} per hour played</span>{% endif %}</span>
+      {% if not _strip %}<span class="shop-wallet-sub">+{{ cfg.shop_coins_per_hour }} for every hour played</span>{% endif %}
     </div>
+    {% if _links %}
     <div class="wallet-links">
       <a href="{{ url_for('shop.history') }}">Your purchases</a>
       {% if user.is_admin %}
@@ -34,8 +45,9 @@
         <a href="{{ url_for('shop.manage') }}">Manage the shop</a>
       {% endif %}
     </div>
+    {% endif %}
   {% else %}
-    <p class="dim"><a href="{{ url_for('main.login', next=request.path) }}">Sign in</a> to buy: purchases
+    <p class="dim shop-wallet-signin"><a href="{{ url_for('main.login', next=request.path) }}">Sign in</a> to buy: purchases
        go to one of your characters by moogle mail, paid in gil or {{ coin_name }} (earned by playing).</p>
   {% endif %}
 </section>

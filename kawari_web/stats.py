@@ -70,7 +70,9 @@ def server_stats(settings, podman) -> dict:
     rows, err = dbtools.characters(settings.world_db)
     if not err:
         stats["characters"] = len(rows)
-        stats["online"] = sum(1 for r in rows if r["is_online"])
+        # is_online outlives a crash, so it only counts while the server runs.
+        stats["online"] = (sum(1 for r in rows if r["is_online"])
+                           if stats.get("running") else 0)
 
     users, err = dbtools.users(settings.login_db)
     if not err:
@@ -125,6 +127,28 @@ def human_minutes(minutes: int) -> str:
     return f"{mins}m"
 
 
+# Level slots (ClassJob.ExpArrayIndex, see gamedata.CLASSJOB_SLOTS) grouped the
+# way the profile's job grid lays them out. A shared slot goes with its job
+# (Arcanist's slot 18 serves both Summoner and Scholar; it sits under Magic).
+ROLE_ORDER = ["Tanks", "Healers", "Melee", "Ranged", "Magic", "Crafting", "Gathering", "Other"]
+_ROLE_SLOTS = {
+    "Tanks": {1, 2, 21, 26},
+    "Healers": {6, 22, 29},
+    "Melee": {0, 4, 19, 23, 28, 30},
+    "Ranged": {3, 20, 27},
+    "Magic": {5, 18, 24, 31},
+    "Crafting": set(range(7, 15)),
+    "Gathering": {15, 16, 17},
+}
+
+
+def _slot_role(slot: int) -> str:
+    for role, slots in _ROLE_SLOTS.items():
+        if slot in slots:
+            return role
+    return "Other"
+
+
 def character_detail(settings, content_id: int) -> dict:
     """Per-character figures for the profile.
 
@@ -135,7 +159,8 @@ def character_detail(settings, content_id: int) -> dict:
     from kawari_core import chardata
 
     out: dict = {"levels": [], "unlocks": [], "stats": [], "name": "",
-                 "content_id": content_id, "summary": {}, "groups": {}}
+                 "content_id": content_id, "summary": {}, "groups": {},
+                 "roles": [], "currencies": [], "top": []}
     try:
         ch = chardata.load(settings.world_db, content_id)
     except Exception:                                   # noqa: BLE001
@@ -150,13 +175,30 @@ def character_detail(settings, content_id: int) -> dict:
             continue
         level = int(levels[slot])
         jobs = G.jobs_for_slot(slot)
+        exp = int(exps[slot]) if slot < len(exps) else 0
+        to_next = G.EXP_TO_NEXT.get(level, 0) if 0 < level < G.LEVEL_CAP else 0
         out["levels"].append({
             "label": label, "abbr": abbr, "level": level, "cap": cap,
-            "exp": int(exps[slot]) if slot < len(exps) else 0,
-            "to_next": G.EXP_TO_NEXT.get(level, 0) if 0 < level < G.LEVEL_CAP else 0,
+            "exp": exp, "to_next": to_next,
+            # How far through the current level, for the thin bar on a job tile.
+            "exp_percent": (min(100, round(exp * 100 / to_next)) if to_next
+                            else (100 if level >= cap else 0)),
+            "role": _slot_role(slot),
             "jobs": [{"name": name, "owned": item_id in owned}
                      for _cid, name, item_id in jobs],
         })
+    roles: dict = {}
+    for row in out["levels"]:
+        roles.setdefault(row["role"], []).append(row)
+    out["roles"] = [(name, roles[name]) for name in ROLE_ORDER if name in roles]
+
+    inv_all = ch.get_json("inventory", "contents", {})
+    purse = inv_all.get("currency", {}) if isinstance(inv_all, dict) else {}
+    out["currencies"] = [
+        {"key": key, "label": label,
+         "quantity": int((purse.get(key) or {}).get("quantity", 0) or 0)}
+        for key, label, _cap in chardata.CURRENCIES
+    ]
 
     for table, col, label, group, _note in chardata.BITMASKS:
         if not ch.has(table, col):
@@ -181,6 +223,7 @@ def character_detail(settings, content_id: int) -> dict:
     current_id = int(ch.get("classjob", "current_class", 1) or 1)
     current_slot = G.CLASSJOB_EXP_INDEX.get(current_id)
     levelled = [row for row in out["levels"] if row["level"] > 0]
+    out["top"] = sorted(levelled, key=lambda row: -row["level"])
     groups: dict = {}
     for row in out["unlocks"]:
         groups.setdefault(row["group"], []).append(row)
@@ -227,3 +270,15 @@ def character_detail(settings, content_id: int) -> dict:
         ("Warrior of Light", "Yes" if ch.get("character", "warrior_of_light", 0) else "No"),
     ]
     return out
+
+
+def server_up(settings, podman) -> bool:
+    """Is the game server's container known to be running? Without Podman it can't
+    be known, so it counts as not running: world.db's is_online stays set on
+    characters after a crash, and believing it would show ghosts as in game."""
+    if podman.mode == "none":
+        return False
+    try:
+        return bool(podman.inspect(settings.shell.container).get("running", False))
+    except Exception:                                   # noqa: BLE001
+        return False

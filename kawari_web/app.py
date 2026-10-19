@@ -244,7 +244,10 @@ def login():
         session.permanent = True
         nxt = request.form.get("next") or request.args.get("next") or ""
         return redirect(nxt if nxt.startswith("/") else url_for("main.profile"))
-    return render_template("login.html", next=request.args.get("next", ""))
+    return render_template(
+        "login.html", next=request.args.get("next", ""),
+        registration_open=bool(settings.server_config().value(
+            "login", "enable_registration", True)))
 
 
 @main.route("/register", methods=["GET", "POST"])
@@ -293,12 +296,32 @@ def logout():
 def home():
     settings = _settings()
     podman = _podman()
+    server = stats.server_stats(settings, podman)
     return render_template(
         "home.html",
-        stats=stats.server_stats(settings, podman),
+        stats=server,
         info=stats.connection_info(settings),
         profiles=webdb.all_profiles(settings.webapp_db)[:12],
+        posts=webdb.recent_posts(settings.webapp_db, 3),
+        announcements=webdb.announcements(settings.webapp_db, 3),
+        in_game=_users_in_game(settings) if stats.server_up(settings, podman) else set(),
+        post_max=webdb.POST_MAX,
     )
+
+
+def _users_in_game(settings) -> set:
+    """User ids with a character marked online in world.db. Only meaningful while
+    the server runs: a crash can leave is_online set on characters."""
+    rows, err = dbtools.characters(settings.world_db)
+    if err:
+        return set()
+    online_sas = {r["service_account_id"] for r in rows if r["is_online"]}
+    if not online_sas:
+        return set()
+    accounts, err = dbtools.service_accounts(settings.login_db)
+    if err:
+        return set()
+    return {a["user_id"] for a in accounts if a["id"] in online_sas}
 
 
 @main.route("/connect")
@@ -339,11 +362,27 @@ def profile(username: str | None = None):
     # Only pay for character stats when that tab is actually being shown.
     details = ({c["content_id"]: stats.character_detail(settings, c["content_id"])
                 for c in visible} if tab == "characters" else {})
+    # is_online can be left set by a crash, so it's only believed while the
+    # container is known to run (the same rule as Home, the feed and the shop).
+    server_up = stats.server_up(settings, _podman())
+    for ch in visible:
+        ch["online"] = bool(ch.get("is_online")) and server_up
+    # The owner's side panel: sync status and recent shop purchases.
+    sync = purchases = None
+    if is_own:
+        from kawari_core import auracite, shop as shopdata
+        from . import syncapi
+        db = settings.webapp_db
+        chosen = syncapi.sync_sections(db, prof["user_id"])
+        sync = {"token": bool(syncapi.token_for(db, prof["user_id"])),
+                "sections": [s.label for s in auracite.SECTIONS if s.key in chosen],
+                "last": syncapi.last_sync(db, prof["user_id"])}
+        purchases = shopdata.purchases(db, prof["user_id"], 3)
     return render_template("profile.html", profile=prof, is_own=is_own,
                            characters=visible, details=details,
                            hidden_count=len(characters) - len(visible), tab=tab,
                            posts=webdb.posts_by(settings.webapp_db, prof["user_id"]),
-                           post_max=webdb.POST_MAX)
+                           post_max=webdb.POST_MAX, sync=sync, purchases=purchases)
 
 
 @main.route("/profile/edit", methods=["POST"])

@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.19.1.
+FFXIV server, built to run in a rootless Podman container. Version 2.20.0.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -161,22 +161,27 @@ routes:
 
 ## Pages
 
-**Home** — server status, population, the connection details, service reachability
-dots, configurable links, and the player list.
+**Home** — server status and population, service reachability dots, the message of
+the day, a three-step "how to start playing" strip (with the autoconfig URL and a copy
+button), the latest three community posts (with a composer when signed in), the three
+most recent announcements, the connection details, the player list (marked *In game*
+while one of their characters is online and the server is running) and the
+configurable links.
 
 **How to Connect** — a walkthrough for Astra, with this server's live values
 filled in: the autoconfig URL to paste, and the individual field values in case
 they are needed by hand. It warns when the server is in local-only mode, because
 then no remote client can reach it.
 
-**Feed and profiles** — posts with text (up to 2000 characters) and up to four
+**Community and profiles** — the top bar calls the feed **Community**. Posts with text (up to 2000 characters) and up to four
 images, comments, and threaded replies. A single image is shown whole rather
 than cropped; two, three or four tile into a fixed frame. Clicking one opens a
 viewer in the same tab, with arrow keys, Escape and a counter for multi-image
 posts. The markup is plain links, so with JavaScript off an image still opens. Authors can edit or delete their own
 posts and comments; deleting a comment removes its replies with it.
 Administrators can remove anyone's. Every profile shows that player's posts; the
-Feed page shows everyone's.
+Community page shows everyone's, can be narrowed to posts with screenshots, and has
+a *Who's online* card and the latest announcements beside it.
 
 **Shop** — the FINAL FANTASY XIV Online Store's catalogue (829 listings in 16
 categories: mounts, minions, emotes, Tales of Adventure, Fantasia, outfits, gear,
@@ -185,13 +190,15 @@ and to buy with **gil** or the site's own **play coins**. See [Shop](#shop).
 
 **Notifications** — a bell in the top bar with an unread badge and a dropdown.
 Delivered for comments on your posts, replies to your comments, the game server
-starting or stopping, and administrator announcements. Turning a kind off in
+starting or stopping, administrator announcements and shop deliveries. The
+Notifications page groups them into Today and Earlier and filters them by kind or
+to the unread ones (`?kind=`). Turning a kind off in
 Settings stops delivery entirely rather than hiding it after the fact. Server
 state is noticed on requests, rate-limited to one check every 20 seconds, since
 there is no scheduler.
 
-**Settings** — categorised: Profile, Security, Notifications and Characters.
-Security changes the password for this site **and** the game launcher, because
+**Settings** — categorised: Profile, Password & account, Notifications, Character
+sync and Character visibility. Password & account changes the password for this site **and** the game launcher, because
 there is only one account; it verifies the current password first.
 
 **Top bar** — brand and navigation (Home, Community, Shop, How to connect) on the
@@ -206,23 +213,31 @@ alongside), so nothing is fetched from outside and the site still works offline 
 its container. Icons are inline SVG.
 
 **Profile** — banner, avatar, bio, and two tabs: **Posts** (the default) and
-**Characters**, each with a count. A character is drawn as a tile board: identity,
-current class, classes levelled, a 33-tile job grid shaded by level, story,
-collections, travel, duties and purse, with the full class table and EXP behind
-one collapsed tile. The grid drops to 6 then 5 columns as the screen narrows and
-the tiles restack. The tab is a query parameter rather than
+**Characters**, each with a count. Each character is a slim card (name, title and
+Grand Company, current class and level, playtime, gil, classes levelled, duties
+unlocked, the top classes, online or where it was last seen) with a **Full stats**
+button that opens a pop-up holding everything: every class and job grouped by role
+(shaded by level, with an EXP bar; hover for the exact EXP and soul crystals), every
+unlock group as progress meters at once, travel, duties, the whole purse, and the
+owner's show/hide switch. The pop-up works without JavaScript (it's a `:target`
+overlay); with it, Escape and a click outside close it and focus returns to the
+button. The owner also sees their sync status and latest purchases beside the
+cards. The tab is a query parameter rather than
 client-side state, so a link to someone's characters stays one, and the character
 stats are only computed when that tab is actually open. Characters are
 **private by default**: a visibility row exists only once the owner publishes one,
-so absence means hidden. Each character has collapsible sections, closed by
-default, for class levels (with which jobs have their soul crystal), unlocks and
-collections as progress bars, and other stats.
+so absence means hidden.
 
 **Dashboard** (administrators only) — server start/stop/restart, service and
 client-version checks, the full `config.yaml` editor, database health and
 migration, backups, account creation and admin promotion, Auracite import and
 export, branding, quest progress, marketboard prices, and container logs. Non-admins get a 403 on every dashboard
 route, including the POST actions, not just a hidden nav link.
+
+**Announcements** (Dashboard → Announcements) sends a notification to every account
+that hasn't turned announcements off, with a live preview of how it will look, and
+keeps a list of everything sent (when, by whom, how many accounts got it). Overview
+keeps a quick form for it too.
 
 It has its own layout: a sidebar grouped by job — **Server** (Overview, Logs,
 Diagnostics), **Build & config** (Setup, Updates & branches, Server config), **Game
@@ -366,6 +381,16 @@ kept for reference) and lives in the web app's own database from then on.
   listings, set prices for a whole category at once, rename the play currency,
   change its rate, adjust anyone's balance, change the letter that comes with a
   purchase, and can reset the listings to the original catalogue.
+* **Pictures.** Every listing has a thumbnail. By default it's the game's own icon
+  for the listing's first item: **Manage the shop → Fetch item icons** runs
+  `kawari-questdump extract` for each listing's icon (the high-resolution copy when
+  the game has one) and turns the textures into PNGs in `<data>/web/item-icons/`,
+  so they come from your game install and never sit in this repository. It needs the
+  item list read first, fetches only icons it doesn't have yet (tick *Fetch them all
+  again* to refresh), and Pillow decodes the game's texture formats. Administrators
+  can also upload up to 8 preview images per listing (Edit listing → Pictures, 4 MB
+  each); the first is the cover, which replaces the icon as the thumbnail, and the
+  listing's page shows them all as a gallery that opens in the image viewer.
 * Buyers get a notification when an order is delivered, and **Your purchases**
   lists their orders.
 

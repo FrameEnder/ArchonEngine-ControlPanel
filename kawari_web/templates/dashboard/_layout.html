@@ -2,6 +2,7 @@
     and title, then the page itself. A page can set its own title with
     {% block page_title %} and put buttons in the header with {% block page_actions %}. -#}
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block body_class %}admin{% endblock %}
 {%- set _adm_ep = request.endpoint or '' -%}
 {%- set _adm_pages = {
@@ -27,6 +28,7 @@
     'shop.edit': ('shop', 'Community', 'Edit listing'),
     'shop.new': ('shop', 'Community', 'New listing'),
     'dashboard.branding': ('branding', 'Community', 'Branding'),
+    'dashboard.announcements': ('announce', 'Community', 'Announcements'),
 } -%}
 {%- set _adm_page = _adm_pages.get(_adm_ep, (section or 'overview', 'Dashboard', 'Dashboard')) -%}
 {%- set _adm_nav = _adm_page[0] if _adm_ep != 'dashboard.job' else (section or 'updates') -%}

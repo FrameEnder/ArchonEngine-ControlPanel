@@ -1,59 +1,101 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block title %}Shop · {{ branding.site_name }}{% endblock %}
 {% block content %}
-<h1>Shop</h1>
-{% include "shop/_wallet.html" %}
+<div class="page-head">
+  <div>
+    <h1>Shop</h1>
+    <p>Purchases arrive by moogle mail on the character you choose.</p>
+  </div>
+  {% if user %}
+  <div class="shop-head-actions">
+    <a class="btn" href="{{ url_for('shop.history') }}">Your purchases</a>
+    {% if user.is_admin %}
+      <a class="btn" href="{{ url_for('shop.new', category=category) }}">Add a listing</a>
+      <a class="btn" href="{{ url_for('shop.manage') }}">Manage the shop</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
 
-<div class="shop-layout">
-  <nav class="shop-cats" aria-label="Categories">
+{% with wallet_links=false %}{% include "shop/_wallet.html" %}{% endwith %}
+
+<div class="shop-browse">
+  <nav class="shop-rail" aria-label="Categories">
+    <div class="shop-rail-label">Categories</div>
     {% for name, n in categories %}
-    <a href="{{ url_for('shop.browse', category=name) }}" class="{{ 'on' if name == category and not query }}">
-      <span>{{ name }}</span><span class="dim small">{{ n }}</span></a>
+    {% set on = name == category and not query %}
+    <a href="{{ url_for('shop.browse', category=name) }}" class="{{ 'on' if on }}" {{ 'aria-current=page' if on }}>
+      <span>{{ name }}</span><span class="shop-rail-count">{{ n }}</span></a>
     {% endfor %}
   </nav>
 
-  <div class="shop-main">
-    <form method="get" action="{{ url_for('shop.browse') }}" class="shop-search">
-      <input type="search" name="q" value="{{ query }}" placeholder="Search every listing" aria-label="Search">
+  <section class="shop-results" aria-label="Listings">
+    <form method="get" action="{{ url_for('shop.browse') }}" class="shop-find" role="search">
+      <label class="shop-find-field">
+        <span class="visually-hidden">Search the shop</span>
+        {{ icon('search', 'icon sm') }}
+        <input type="search" name="q" value="{{ query }}" placeholder="Search every listing">
+      </label>
       <button class="btn">Search</button>
     </form>
-    <p class="dim small">
+    <p class="shop-count">
       {% if query %}{{ count }} listing{{ '' if count == 1 else 's' }} matching “{{ query }}”
+        · <a href="{{ url_for('shop.browse') }}">Clear</a>
       {% else %}{{ category }} · {{ count }} listing{{ '' if count == 1 else 's' }}{% endif %}
       {% if user and user.is_admin and not index_ready %} · <span class="warn-inline">listings aren't linked to game items yet:
         <a href="{{ url_for('shop.manage') }}">read the item list</a></span>{% endif %}
     </p>
 
-    <div class="shop-grid">
+    {% if listings %}
+    <ul class="shop-cards" role="list">
       {% for l in listings %}
-      <a class="shop-card {{ 'is-hidden' if not l.visible }}" href="{{ url_for('shop.item', listing_id=l.id) }}">
-        <div class="shop-card-head">
-          <h3>{{ l.name }}</h3>
-          {% if not l.visible %}<span class="pill small">hidden</span>{% endif %}
+      {% set pic = pictures.get(l.id, {}) %}
+      <li class="shop-tile {{ 'is-hidden' if not l.visible }}">
+        <div class="shop-thumb {{ 'is-cover' if pic.cover else ('is-icon' if pic.thumb else 'is-empty') }}">
+          {% if pic.thumb %}
+            <img src="{{ pic.thumb }}" alt="" loading="lazy" {{ 'width=80 height=80' if not pic.cover }}>
+          {% else %}
+            {{ icon('bag') }}
+          {% endif %}
+          {% if not l.visible %}<span class="pill small shop-thumb-badge">Hidden</span>{% endif %}
         </div>
-        {% if query %}<span class="dim small">{{ l.category }}</span>{% endif %}
-        <p class="dim small clamp">{{ l.description }}</p>
-        <div class="price-row">
-          {% if cfg.shop_gil_enabled == '1' and l.sell_gil %}<span class="price-chip gil">{{ '{:,}'.format(l.price_gil) }} gil</span>{% endif %}
-          {% if cfg.shop_coins_enabled == '1' and l.sell_coins %}<span class="price-chip coin">{{ '{:,}'.format(l.price_coins) }} {{ coin_name }}</span>{% endif %}
+        <div class="shop-tile-body">
+          <div class="shop-tag">{{ l.category }}</div>
+          <h3><a href="{{ url_for('shop.item', listing_id=l.id) }}">{{ l.name }}</a></h3>
+          {% if l.description %}<p class="shop-tile-desc">{{ l.description }}</p>{% endif %}
+          <div class="shop-tile-foot">
+            <div class="price-row">
+              {% if cfg.shop_gil_enabled == '1' and l.sell_gil %}<span class="price-chip gil">{{ '{:,}'.format(l.price_gil) }} gil</span>{% endif %}
+              {% if cfg.shop_coins_enabled == '1' and l.sell_coins %}<span class="price-chip coin">{{ '{:,}'.format(l.price_coins) }} {{ coin_name }}</span>{% endif %}
+            </div>
+            {% if not l.ready %}<span class="warn-inline small">{{ 'Contents not set' if not l.contents else 'Not linked to game items' }}</span>
+            {% elif cfg.shop_show_retail == '1' and l.retail_price %}<span class="faint small">Retail {{ l.retail_price }}</span>{% endif %}
+          </div>
         </div>
-        <div class="shop-card-foot small">
-          {% if not l.ready %}<span class="warn-inline">{{ 'Contents not set' if not l.contents else 'Not linked to game items' }}</span>
-          {% elif cfg.shop_show_retail == '1' and l.retail_price %}<span class="dim">Retail {{ l.retail_price }}</span>{% endif %}
-        </div>
-      </a>
-      {% else %}
-      <div class="card"><p class="dim">Nothing here.</p></div>
+      </li>
       {% endfor %}
-    </div>
+    </ul>
+    {% else %}
+    <div class="card shop-empty">{{ icon('bag') }}<p class="dim">Nothing here.</p></div>
+    {% endif %}
 
     {% if pages > 1 %}
-    <nav class="pager">
-      {% if page > 1 %}<a class="btn small" href="{{ url_for('shop.browse', category=category, q=query, page=page - 1) }}">Previous</a>{% endif %}
-      <span class="dim small">Page {{ page }} of {{ pages }}</span>
-      {% if page < pages %}<a class="btn small" href="{{ url_for('shop.browse', category=category, q=query, page=page + 1) }}">Next</a>{% endif %}
+    <nav class="shop-pager" aria-label="Pages">
+      {% if page > 1 %}<a class="shop-page wide" href="{{ url_for('shop.browse', category=category, q=query, page=page - 1) }}">Previous</a>{% endif %}
+      {% set ns = namespace(last=0) %}
+      {% for n in range(1, pages + 1) %}
+        {% if n == 1 or n == pages or (n - page)|abs <= 1 %}
+          {% if ns.last and n - ns.last > 1 %}<span class="shop-page gap" aria-hidden="true">…</span>{% endif %}
+          {% if n == page %}<span class="shop-page on" aria-current="page"><span class="visually-hidden">Page </span>{{ n }}</span>
+          {% else %}<a class="shop-page" href="{{ url_for('shop.browse', category=category, q=query, page=n) }}"><span class="visually-hidden">Page </span>{{ n }}</a>{% endif %}
+          {% set ns.last = n %}
+        {% endif %}
+      {% endfor %}
+      {% if page < pages %}<a class="shop-page wide" href="{{ url_for('shop.browse', category=category, q=query, page=page + 1) }}">Next</a>{% endif %}
     </nav>
+    <p class="faint small shop-pager-note">Page {{ page }} of {{ pages }}</p>
     {% endif %}
-  </div>
+  </section>
 </div>
 {% endblock %}

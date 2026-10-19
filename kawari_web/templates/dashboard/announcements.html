@@ -1,0 +1,57 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Announcements · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<div class="split">
+  <section class="card split-main">
+    <h2>Send an announcement</h2>
+    <p class="dim">Every account gets it as a notification, apart from anyone who turned announcements off in
+       their settings. Recent ones also show on the Home page.</p>
+    <form method="post" action="{{ url_for('dashboard.announce') }}" data-preview-form>
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label>Title
+        <input name="title" maxlength="120" required placeholder="Maintenance at 9pm" data-preview-title></label>
+      <label>Details <span class="faint small">optional</span>
+        <textarea name="body" rows="4" maxlength="500" data-preview-body></textarea></label>
+      <button class="btn accent">Send to everyone</button>
+    </form>
+  </section>
+
+  <aside class="card split-side">
+    <h2>What players see</h2>
+    <p class="hint" style="margin-top:0">The notification, as it appears under the bell.</p>
+    <div class="notif-preview">
+      <span class="notif-preview-icon">{{ icon('megaphone', 'icon sm') }}</span>
+      <div>
+        <b data-preview-title-out>Maintenance at 9pm</b>
+        <div class="dim small" data-preview-body-out></div>
+        <div class="faint small">Just now</div>
+      </div>
+    </div>
+    <p class="hint">{{ accounts }} account{{ '' if accounts == 1 else 's' }} on this server.</p>
+  </aside>
+</div>
+
+<section class="card flush">
+  <div class="card-head"><h2>Sent</h2><span class="faint small">Newest first</span></div>
+  {% if sent %}
+  <div class="table-wrap">
+    <table class="grid">
+      <thead><tr><th>When</th><th>Announcement</th><th>Sent by</th><th>Delivered</th></tr></thead>
+      <tbody>
+      {% for a in sent %}
+        <tr>
+          <td class="num" style="white-space:nowrap">{{ a.created_at }}</td>
+          <td><b>{{ a.title }}</b>{% if a.body %}<div class="dim small">{{ a.body }}</div>{% endif %}</td>
+          <td>{{ a.sender_display or a.sender or '—' }}</td>
+          <td class="num">{{ a.recipients }} of {{ a.accounts }}
+            {% if a.accounts > a.recipients %}<div class="faint small">{{ a.accounts - a.recipients }} opted out</div>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="dim" style="padding: 0 20px 20px">Nothing sent yet. Announcements sent before this page existed aren't listed.</p>
+  {% endif %}
+</section>
+{% endblock %}

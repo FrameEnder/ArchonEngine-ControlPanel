@@ -1,69 +1,106 @@
 {% extends "base.html" %}
 {% from "_post.html" import post_card, composer with context %}
-{% from "_character.html" import character_board with context %}
+{% from "_character.html" import character_card, character_dialog with context %}
+{% from "_icons.html" import icon %}
 {% block title %}{{ profile.display_name or profile.username }} · {{ branding.site_name }}{% endblock %}
 {% block content %}
 
-<section class="profile-head">
-  <div class="banner" {% if profile.banner %}style="background-image:url('{{ url_for('main.static_upload', name=profile.banner) }}')"{% endif %}></div>
-  <div class="identity">
+<section class="pf-ident" aria-labelledby="pf-name">
+  <div class="pf-banner" {% if profile.banner %}style="background-image:url('{{ url_for('main.static_upload', name=profile.banner) }}')"{% endif %}></div>
+  <div class="pf-ident-row">
     {% if profile.avatar %}
-      <img class="avatar" src="{{ url_for('main.static_upload', name=profile.avatar) }}" alt="">
+      <img class="pf-avatar" src="{{ url_for('main.static_upload', name=profile.avatar) }}" alt="">
     {% else %}
-      <div class="avatar placeholder">{{ (profile.display_name or profile.username)[:1]|upper }}</div>
+      <div class="pf-avatar placeholder" aria-hidden="true">{{ (profile.display_name or profile.username)[:1]|upper }}</div>
     {% endif %}
-    <div>
-      <h1>{{ profile.display_name or profile.username }}</h1>
-      <p class="dim">@{{ profile.username }}
-        {% if profile.is_admin %}<span class="pill small">administrator</span>{% endif %}
-        {% if profile.created_at %}<span class="dim"> · joined {{ profile.created_at }}</span>{% endif %}
-      </p>
+    <div class="pf-ident-who">
+      <div class="pf-ident-name">
+        <h1 id="pf-name">{{ profile.display_name or profile.username }}</h1>
+        {% if profile.is_admin %}<span class="pill admin small">Administrator</span>{% endif %}
+      </div>
+      <div class="dim">@{{ profile.username }}{% if profile.created_at %} · Joined {{ profile.created_at }}{% endif %}</div>
     </div>
+    {% if is_own %}
+    <div class="pf-actions">
+      <a class="btn" href="{{ url_for('social.settings_page', page='profile') }}">Edit profile</a>
+      <a class="btn accent" href="{{ url_for('social.settings_page', page='characters') }}">Character visibility</a>
+    </div>
+    {% endif %}
   </div>
+  {% if profile.bio %}<p class="pf-bio bio">{{ profile.bio }}</p>{% endif %}
 </section>
 
-{% if profile.bio %}<section class="card"><p class="bio">{{ profile.bio }}</p></section>{% endif %}
-
-{% if is_own %}
-<p class="btnrow">
-  <a class="btn" href="{{ url_for('social.settings_page', page='profile') }}">Edit profile</a>
-  <a class="btn" href="{{ url_for('social.settings_page', page='characters') }}">Character visibility</a>
-</p>
-{% endif %}
-
-<nav class="tabs">
+<nav class="tabs pf-tabs" aria-label="Profile sections">
   <a href="{{ url_for('main.profile', username=profile.username, tab='posts') }}"
-     class="{{ 'on' if tab == 'posts' }}">Posts <span class="count">{{ posts | length }}</span></a>
+     class="{{ 'on' if tab == 'posts' }}" {{ 'aria-current=page' if tab == 'posts' }}>Posts <span class="count">{{ posts | length }}</span></a>
   <a href="{{ url_for('main.profile', username=profile.username, tab='characters') }}"
-     class="{{ 'on' if tab == 'characters' }}">Characters <span class="count">{{ characters | length }}</span></a>
+     class="{{ 'on' if tab == 'characters' }}" {{ 'aria-current=page' if tab == 'characters' }}>Characters <span class="count">{{ characters | length }}</span></a>
 </nav>
 
+<div class="split pf-split">
+<div class="split-main pf-stack">
 {% if tab == 'posts' %}
-<section>
   {% if is_own %}{{ composer(url_for('social.create_post'), url_for('main.profile')) }}{% endif %}
   {% for post in posts %}{{ post_card(post) }}{% else %}
-    <div class="card"><p class="dim">
+    <div class="card"><p class="dim pf-empty">
       {% if is_own %}You have not posted anything yet.
       {% else %}No posts yet.{% endif %}</p></div>
   {% endfor %}
-</section>
 
 {% else %}
-<section>
   {% if is_own and hidden_count %}
-    <p class="dim small">{{ hidden_count }} character(s) hidden from other players —
+    <p class="dim small pf-note-line">{{ hidden_count }} character(s) hidden from other players —
        change that in <a href="{{ url_for('social.settings_page', page='characters') }}">Settings</a>.</p>
   {% endif %}
 
   {% if not characters %}
-    <div class="card"><p class="dim">
+    <div class="card"><p class="dim pf-empty">
       {% if is_own %}No characters on this account yet. Create one in the game client.
       {% else %}This player has no public characters.{% endif %}</p></div>
   {% endif %}
 
   {% for ch in characters %}
-    {{ character_board(ch, details[ch.content_id], is_own) }}
+    {{ character_card(ch, details[ch.content_id], is_own) }}
   {% endfor %}
-</section>
+{% endif %}
+</div>
+
+{% if is_own %}
+<aside class="split-side pf-stack">
+  <section class="card pf-side" aria-labelledby="sync-h">
+    <div class="pf-side-head">
+      <h2 id="sync-h">Character sync</h2>
+      {% if sync.token %}<span class="pill ok small">Active</span>{% else %}<span class="pill small">Off</span>{% endif %}
+    </div>
+    <p class="dim small">The Kawari Companion plugin keeps your characters here up to date while you play.</p>
+    <dl class="pf-mini">
+      <dt>Token</dt><dd>{{ 'Issued' if sync.token else 'None yet' }}</dd>
+      {% if sync.token %}<dt>Syncs</dt><dd>{{ sync.sections | join(', ') if sync.sections else 'Nothing' }}</dd>{% endif %}
+      <dt>Last sync</dt><dd>{% if sync.last %}{{ sync.last.at }}{% if not sync.last.ok %} (failed){% endif %}{% else %}Never{% endif %}</dd>
+    </dl>
+    <a class="pf-more" href="{{ url_for('social.settings_page', page='sync') }}">Manage sync</a>
+  </section>
+
+  <section class="card pf-side" aria-labelledby="buys-h">
+    <h2 id="buys-h">Recent purchases</h2>
+    {% if purchases %}
+      <ul class="pf-ann">
+        {% for p in purchases %}
+        <li><b>{{ p.listing }}</b>
+          <span class="faint small">{% if p.character %}Sent to {{ p.character }} · {% endif %}{{ p.created_at }}</span></li>
+        {% endfor %}
+      </ul>
+      <a class="pf-more" href="{{ url_for('shop.history') }}">All purchases</a>
+    {% else %}
+      <p class="dim small">Nothing bought yet. <a href="{{ url_for('shop.browse') }}">Browse the shop</a></p>
+    {% endif %}
+  </section>
+</aside>
+{% endif %}
+</div>
+
+{# The full-stats pop-ups sit outside the layout so they cover the whole page. #}
+{% if tab == 'characters' %}
+  {% for ch in characters %}{{ character_dialog(ch, details[ch.content_id], is_own) }}{% endfor %}
 {% endif %}
 {% endblock %}

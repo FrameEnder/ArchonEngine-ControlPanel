@@ -86,7 +86,7 @@
             <a class="sep" href="{{ url_for('main.logout') }}">Sign out</a>
           </div>
         </details>
-      {% else %}
+      {% elif ep != 'main.setup' %}
         <a class="btn" href="{{ url_for('main.login') }}">Sign in</a>
         <a class="btn accent" href="{{ url_for('main.register') }}">Register</a>
       {% endif %}

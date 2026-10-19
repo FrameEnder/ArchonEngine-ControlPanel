@@ -1,104 +1,178 @@
-{# One character as a compact tile board inside its own bordered container. #}
-{% macro character_board(ch, d, own) %}
+{# A character on a profile: the slim card, and the full-stats pop-up it opens.
+
+   The pop-up is a :target overlay, so it opens and closes with plain links
+   when JavaScript is off; parts/people.js takes it over when it is on (Escape,
+   backdrop click, focus, scroll lock, and no #hash left behind). #}
+{% from "_icons.html" import icon %}
+
+{% macro tier(level) -%}
+{{ 3 if level >= 70 else (2 if level >= 40 else (1 if level > 0 else 0)) }}
+{%- endmacro %}
+
+{% macro whois(s) -%}
+{%- set bits = [] -%}
+{%- if s.title %}{% set _ = bits.append(s.title) %}{% endif -%}
+{%- if s.grand_company and s.grand_company != 'None' %}{% set _ = bits.append(s.grand_company ~ (', ' ~ s.gc_rank if s.gc_rank else '')) %}{% endif -%}
+{{ bits | join(' · ') }}
+{%- endmacro %}
+
+{% macro character_card(ch, d, own) %}
 {% set s = d.summary %}
-<section class="character-board">
-
-  <header class="cb-head">
-    <span class="crest">{{ ch.name[:1]|upper }}</span>
-    <span class="who">
-      <span class="name">{{ ch.name }}</span>
-      <span class="dim small">
-        {% if s.title %}{{ s.title }}{% endif %}
-        {% if s.grand_company and s.grand_company != 'None' %} · {{ s.grand_company }}{% if s.gc_rank %}, {{ s.gc_rank }}{% endif %}{% endif %}
-      </span>
-    </span>
-
-    <span class="cb-figures">
-      <span class="fig"><b class="accent">{{ s.current_level or '—' }}</b><span class="dim small">{{ s.current_class }}</span></span>
-      <span class="fig"><b>{{ s.levelled }}<span class="of">/{{ s.slot_count }}</span></b><span class="dim small">levelled · top {{ s.highest }}</span></span>
-      <span class="fig"><b>{{ '{:,}'.format(s.gil) }}</b><span class="dim small">gil</span></span>
-    </span>
-
-    {% if own %}
-    <form method="post" action="{{ url_for('main.character_visibility', content_id=ch.content_id) }}">
-      <input type="hidden" name="csrf" value="{{ csrf_token }}">
-      <input type="hidden" name="public" value="{{ '0' if ch.is_public else '1' }}">
-      <button class="eye {{ 'on' if ch.is_public else '' }}" type="submit">
-        {{ 'visible' if ch.is_public else 'hidden' }}</button>
-    </form>
-    {% endif %}
-  </header>
-
-  <div class="cb-grid">
-
-    <div class="tile span-2">
-      <h4>Classes and jobs <span class="dim small">hover a tile for EXP</span></h4>
-      <div class="jobgrid">
-        {% for row in d.levels %}
-          <span class="job tier-{{ 3 if row.level >= 70 else (2 if row.level >= 40 else (1 if row.level > 0 else 0)) }}"
-                title="{{ row.label }}&#10;{% if row.level %}Level {{ row.level }} · EXP {{ '{:,}'.format(row.exp) }} / {{ '{:,}'.format(row.to_next) if row.to_next else 'max' }}{% else %}Not unlocked{% endif %}{% for j in row.jobs %}&#10;{{ j.name }}{{ '' if j.owned else ' — no soul crystal' }}{% endfor %}">
-            <span class="abbr">{{ row.abbr }}</span>
-            <span class="lvl">{{ row.level or '—' }}</span>
-          </span>
-        {% endfor %}
+<article class="pf-char" aria-labelledby="card-{{ ch.content_id }}-name">
+  <span class="pf-crest" aria-hidden="true">{{ ch.name[:1]|upper }}</span>
+  <div class="pf-char-main">
+    <div class="pf-char-top">
+      <div class="pf-char-id">
+        <h2 id="card-{{ ch.content_id }}-name">{{ ch.name }}</h2>
+        <div class="dim">
+          {%- if s.current_class %}{{ s.current_class }} · Level {{ s.current_level or '—' }}{% endif -%}
+          {%- set who = whois(s) %}{% if who %}<span class="pf-sep"> · </span>{{ who }}{% endif -%}
+        </div>
+      </div>
+      <div class="pf-char-badges">
+        {% if ch.online %}
+          <span class="pill ok">In game now</span>
+        {% else %}
+          <span class="pill">Offline{% if s.zone %} · last seen in {{ s.zone }}{% endif %}</span>
+        {% endif %}
+        {% if own %}<span class="pill small {{ 'ok' if ch.is_public }}">{{ 'Public' if ch.is_public else 'Hidden' }}</span>{% endif %}
       </div>
     </div>
 
-    {# Every unlock category, one panel at a time. Without JavaScript all
-       panels stay visible, so nothing is ever hidden from a reader. #}
-    <div class="tile span-2 scrubber" data-scrub>
-      <h4>
-        <span>Unlocks <span class="dim small" data-scrub-label></span></span>
-        <span class="scrub-nav">
-          <button type="button" class="scrub" data-scrub-prev aria-label="Previous category">&lsaquo;</button>
-          <span class="dim small" data-scrub-count></span>
-          <button type="button" class="scrub" data-scrub-next aria-label="Next category">&rsaquo;</button>
-        </span>
-      </h4>
-      {% for group, rows in d.groups.items() %}
-        <div class="scrub-panel" data-scrub-panel data-title="{{ group }}">
-          <div class="two-col">
+    {% if s %}
+    <dl class="pf-figs">
+      <div><dt>Played</dt><dd>{{ s.played }}</dd></div>
+      <div><dt>Gil</dt><dd class="gil-text num">{{ '{:,}'.format(s.gil) }}</dd></div>
+      <div><dt>Levelled</dt><dd class="num">{{ s.levelled }}<span class="faint">/{{ s.slot_count }}</span></dd></div>
+      <div><dt>Duties unlocked</dt><dd class="num">{{ s.duties }}</dd></div>
+    </dl>
+    {% endif %}
+
+    {% if d.top %}
+    <div>
+      <div class="faint small pf-label">Top classes &amp; jobs</div>
+      <ul class="pf-jobchips">
+        {% for row in d.top[:6] %}
+          <li class="{{ 'is-top' if loop.first }}" title="{{ row.label }}">{{ row.abbr }} <b class="num">{{ row.level }}</b></li>
+        {% endfor %}
+        {% if d.top|length > 6 %}<li class="is-more">+{{ d.top|length - 6 }} more</li>{% endif %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <div class="pf-char-foot">
+      <a class="btn accent" href="#char-{{ ch.content_id }}" data-pf-open="char-{{ ch.content_id }}"
+         aria-haspopup="dialog">{{ icon('chart', 'icon sm') }}Full stats<span class="visually-hidden"> for {{ ch.name }}</span></a>
+    </div>
+  </div>
+</article>
+{% endmacro %}
+
+{% macro character_dialog(ch, d, own) %}
+{% set s = d.summary %}
+{% set id = 'char-' ~ ch.content_id %}
+<section id="{{ id }}" class="pf-dialog" role="dialog" aria-modal="true" aria-labelledby="{{ id }}-name">
+  <a class="pf-dialog-backdrop" href="#" tabindex="-1" aria-hidden="true"></a>
+  <div class="pf-dialog-panel" tabindex="-1">
+
+    <header class="pf-dlg-head">
+      <span class="pf-crest" aria-hidden="true">{{ ch.name[:1]|upper }}</span>
+      <div class="pf-dlg-who">
+        <h2 id="{{ id }}-name">{{ ch.name }}</h2>
+        {% set who = whois(s) %}{% if who %}<div class="dim">{{ who }}</div>{% endif %}
+      </div>
+      <div class="pf-dlg-figs">
+        <div><b class="accent-text">{{ s.current_level or '—' }}</b><span>{{ s.current_class }}</span></div>
+        <div><b>{{ s.levelled }}<span class="faint pf-of">/{{ s.slot_count }}</span></b><span>levelled · top {{ s.highest }}</span></div>
+        <div><b class="gil-text">{{ '{:,}'.format(s.gil or 0) }}</b><span>gil</span></div>
+      </div>
+      <a class="pf-dlg-close" href="#" data-pf-close aria-label="Close character details">{{ icon('close', 'icon sm') }}</a>
+    </header>
+
+    <div class="pf-dlg-bar">
+      {% if ch.online %}<span class="pill ok small">In game now</span>{% else %}<span class="pill small">Offline</span>{% endif %}
+      {% if own %}
+        <span class="pill small {{ 'ok' if ch.is_public }}">{{ 'Public' if ch.is_public else 'Hidden from others' }}</span>
+        <form method="post" action="{{ url_for('main.character_visibility', content_id=ch.content_id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}">
+          <input type="hidden" name="public" value="{{ '0' if ch.is_public else '1' }}">
+          <button class="btn small" type="submit">{{ 'Hide from profile' if ch.is_public else 'Show on profile' }}</button>
+        </form>
+      {% endif %}
+    </div>
+
+    <div class="pf-dlg-body">
+      <section aria-labelledby="{{ id }}-jobs" class="pf-dlg-sec">
+        <div class="pf-dlg-sec-head">
+          <h3 id="{{ id }}-jobs">Classes &amp; jobs</h3>
+          <ul class="pf-legend" aria-label="Legend">
+            <li><span class="job tier-3"></span>70+</li>
+            <li><span class="job tier-2"></span>40–69</li>
+            <li><span class="job tier-1"></span>1–39</li>
+            <li><span class="job tier-0"></span>Not unlocked</li>
+          </ul>
+        </div>
+        {% for role, rows in d.roles %}
+        <div class="pf-role">
+          <span class="pf-role-name">{{ role }}</span>
+          <ul class="pf-jobs">
+            {% for row in rows %}
+            {% set tip -%}
+              {{ row.label }}&#10;{% if row.level %}Level {{ row.level }} · EXP {{ '{:,}'.format(row.exp) }} / {{ '{:,}'.format(row.to_next) if row.to_next else 'max' }}{% else %}Not unlocked{% endif %}{% for j in row.jobs %}&#10;{{ j.name }}{{ '' if j.owned else ' — no soul crystal' }}{% endfor %}
+            {%- endset %}
+            <li class="job tier-{{ tier(row.level) }}" title="{{ tip }}">
+              <span class="abbr" aria-hidden="true">{{ row.abbr }}</span>
+              <span class="lvl" aria-hidden="true">{{ row.level or '—' }}</span>
+              <span class="pf-exp" aria-hidden="true"><span style="width: {{ row.exp_percent if row.level else 0 }}%"></span></span>
+              <span class="visually-hidden">{{ row.label }}:
+                {% if row.level %}level {{ row.level }}, EXP {{ '{:,}'.format(row.exp) }} of {{ '{:,}'.format(row.to_next) if row.to_next else 'max' }}{% else %}not unlocked{% endif %}.
+                {% for j in row.jobs %}{{ j.name }}: {{ 'soul crystal owned' if j.owned else 'no soul crystal' }}. {% endfor %}</span>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endfor %}
+        <p class="hint">The thin bar under each level is EXP toward the next level. Hover a tile for exact
+           numbers and soul crystals.</p>
+      </section>
+
+      <section aria-labelledby="{{ id }}-unlocks" class="pf-dlg-sec">
+        <h3 id="{{ id }}-unlocks">Unlocks</h3>
+        <div class="pf-groups">
+          {% for group, rows in d.groups.items() %}
+          {% set got = rows | sum(attribute='set') %}{% set total = rows | sum(attribute='total') %}
+          <div class="pf-group">
+            <div class="pf-group-head">
+              <h4>{{ group }}</h4>
+              <span class="faint small num">{{ '{:,}'.format(got) }} / {{ '{:,}'.format(total) }}</span>
+            </div>
             {% for row in rows %}{{ meter(row) }}{% endfor %}
           </div>
+          {% else %}
+          <p class="dim">No unlock data for this character.</p>
+          {% endfor %}
         </div>
-      {% endfor %}
-    </div>
+      </section>
 
-    <div class="tile">
-      <h4>Travel</h4>
-      <dl class="mini">
-        {% for row in d.groups.get('Travel', []) %}
-          <dt>{{ row.label.split('(')[0]|trim }}</dt>
-          <dd>{{ '{:,}'.format(row.set) }}/{{ '{:,}'.format(row.total) }}</dd>
-        {% endfor %}
-      </dl>
-    </div>
-
-    <div class="tile">
-      <h4>Duties</h4>
-      <dl class="mini">
-        {% for row in d.groups.get('Duties', [])[:6] %}
-          <dt>{{ row.label.replace(' unlocked', '') }}</dt>
-          <dd>{{ '{:,}'.format(row.set) }}/{{ '{:,}'.format(row.total) }}</dd>
-        {% endfor %}
-      </dl>
-    </div>
-
-    <div class="tile">
-      <h4>Purse</h4>
-      <dl class="mini">
-        <dt>Gil</dt><dd>{{ '{:,}'.format(s.gil) }}</dd>
-        <dt>MGP</dt><dd>{{ '{:,}'.format(s.mgp) }}</dd>
-      </dl>
-    </div>
-
-    <div class="tile">
-      <h4>Whereabouts</h4>
-      <dl class="mini">
-        <dt>Last seen</dt><dd class="plain">{{ s.zone }}</dd>
-        <dt>Home point</dt><dd class="plain">{{ s.home_point or '—' }}</dd>
-        <dt>Played</dt><dd>{{ s.played }}</dd>
-      </dl>
+      <div class="pf-groups">
+        <section aria-labelledby="{{ id }}-purse" class="pf-group">
+          <h3 id="{{ id }}-purse">Purse</h3>
+          <dl class="pf-purse">
+            {% for c in d.currencies %}
+            <div><dt>{{ c.label }}</dt><dd class="num {{ 'gil-text' if c.key == 'gil' }}">{{ '{:,}'.format(c.quantity) }}</dd></div>
+            {% endfor %}
+          </dl>
+        </section>
+        <section aria-labelledby="{{ id }}-where" class="pf-group">
+          <h3 id="{{ id }}-where">Whereabouts</h3>
+          <dl class="kv">
+            <dt>{{ 'Now in' if ch.online else 'Last seen' }}</dt><dd>{{ s.zone or '—' }}</dd>
+            <dt>Home point</dt><dd>{{ s.home_point or '—' }}</dd>
+            <dt>Played</dt><dd>{{ s.played or '—' }}</dd>
+            <dt>Warrior of Light</dt><dd>{{ 'Yes' if s.warrior_of_light else 'No' }}</dd>
+          </dl>
+        </section>
+      </div>
     </div>
   </div>
 </section>

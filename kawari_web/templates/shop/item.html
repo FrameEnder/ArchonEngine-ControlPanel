@@ -1,77 +1,138 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block title %}{{ listing.name }} · Shop · {{ branding.site_name }}{% endblock %}
 {% block content %}
-<p class="crumbs small"><a href="{{ url_for('shop.browse') }}">Shop</a> ›
-  <a href="{{ url_for('shop.browse', category=listing.category) }}">{{ listing.category }}</a></p>
-<div class="item-head">
-  <h1>{{ listing.name }}</h1>
-  {% if user and user.is_admin %}<a class="btn small" href="{{ url_for('shop.edit', listing_id=listing.id) }}">Edit</a>{% endif %}
-  {% if not listing.visible %}<span class="pill small">hidden</span>{% endif %}
+<div class="shop-item-top">
+  <nav class="shop-crumbs" aria-label="Breadcrumb">
+    <a href="{{ url_for('shop.browse') }}">Shop</a>
+    <span class="shop-crumb-sep" aria-hidden="true">›</span>
+    <a href="{{ url_for('shop.browse', category=listing.category) }}">{{ listing.category }}</a>
+    <span class="shop-crumb-sep" aria-hidden="true">›</span>
+    <span aria-current="page">{{ listing.name }}</span>
+  </nav>
+  {% if user and user.is_admin %}
+  <div class="shop-head-actions">
+    <span class="pill admin small">Admin</span>
+    <a class="btn small" href="{{ url_for('shop.edit', listing_id=listing.id) }}">Edit listing</a>
+    <a class="btn small" href="{{ url_for('shop.edit', listing_id=listing.id) }}#pictures">Pictures</a>
+  </div>
+  {% endif %}
 </div>
+
 {% include "shop/_wallet.html" %}
 
-<div class="shop-split shop-item">
-  <section class="card">
-    <h2>What you get</h2>
-    {% if listing.description %}<p>{{ listing.description }}</p>{% endif %}
-    {% if listing.linked %}
-    <table class="grid">
-      <tr><th>Qty</th><th>Item</th><th>In game</th></tr>
-      {% for e in listing.linked %}
-      <tr>
-        <td class="mono">{{ e.qty }}</td>
-        <td>{{ e.item.name if e.item else e.name }}</td>
-        <td class="small">
-          {% if e.item %}<span class="dim">{{ e.item.category }}{% if user and user.is_admin %} · #{{ e.item.id }}{% endif %}</span>
-            {% if e.item.description %}<div class="dim">{{ e.item.description }}</div>{% endif %}
-          {% else %}<span class="warn-inline">{{ e.problem }}</span>{% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </table>
+<div class="shop-item">
+  {#- The pictures: the uploaded gallery (cover first), else the game icon, else a plain tile. -#}
+  <div class="shop-media">
+    {% if gallery|length > 1 %}
+      <a class="shop-hero is-cover" href="{{ gallery[0] }}" data-shop-open="0">
+        <img src="{{ gallery[0] }}" alt="{{ listing.name }}, picture 1 of {{ gallery|length }}">
+      </a>
+      <div class="shop-strip" data-gallery aria-label="All pictures">
+        {% for url in gallery %}
+        <a class="shot {{ 'on' if loop.first }}" href="{{ url }}" {{ 'aria-current=true' if loop.first }}>
+          <img src="{{ url }}" alt="Picture {{ loop.index }} of {{ gallery|length }}" loading="lazy"></a>
+        {% endfor %}
+      </div>
+    {% elif gallery %}
+      <div data-gallery>
+        <a class="shot shop-hero is-cover" href="{{ gallery[0] }}">
+          <img src="{{ gallery[0] }}" alt="{{ listing.name }}"></a>
+      </div>
+    {% elif pictures.thumb %}
+      <div class="shop-hero is-icon"><img src="{{ pictures.thumb }}" alt="{{ listing.name }} (game icon)" width="80" height="80"></div>
     {% else %}
-    <p class="warn-inline">What this listing contains hasn't been set yet.</p>
+      <div class="shop-hero is-empty">{{ icon('bag') }}<span class="faint small">No picture yet</span></div>
     {% endif %}
-    {% if listing.notes %}<p class="dim small">{{ listing.notes }}</p>{% endif %}
-    <dl class="kv small">
-      {% if cfg.shop_show_retail == '1' and listing.retail_price %}<dt>Retail price</dt><dd>{{ listing.retail_price }}</dd>{% endif %}
-      {% if listing.patch %}<dt>Added in patch</dt><dd>{{ listing.patch }}</dd>{% endif %}
-    </dl>
-  </section>
+  </div>
 
-  <section class="card buy-card">
-    <h2>Buy</h2>
-    {% set can_gil = cfg.shop_gil_enabled == '1' and listing.sell_gil %}
-    {% set can_coins = cfg.shop_coins_enabled == '1' and listing.sell_coins %}
-    {% if not user %}
-      <p><a class="btn accent" href="{{ url_for('main.login', next=request.path) }}">Sign in to buy</a></p>
-    {% elif not selected %}
-      <p class="dim">You need a character to deliver to.</p>
-    {% elif not listing.ready %}
-      <p class="warn-inline">This can't be bought until {{ 'its contents are set' if not listing.contents else 'its contents are linked to game items' }}.</p>
-    {% else %}
-      <p class="dim small">Delivered to <b>{{ selected.name }}</b> by moogle mail: take it from any mailbox in game.</p>
-      {% if can_gil %}
-      <form method="post" action="{{ url_for('shop.buy', listing_id=listing.id) }}">
-        <input type="hidden" name="csrf" value="{{ csrf_token }}">
-        <input type="hidden" name="currency" value="gil">
-        <button class="btn buy-btn" {{ 'disabled' if online or (gil or 0) < listing.price_gil }}>
-          Buy for <b>{{ '{:,}'.format(listing.price_gil) }} gil</b></button>
-        {% if online %}<p class="dim small">{{ selected.name }} is logged in: log out to pay with gil.</p>
-        {% elif (gil or 0) < listing.price_gil %}<p class="dim small">{{ selected.name }} has {{ '{:,}'.format(gil or 0) }} gil.</p>{% endif %}
-      </form>
+  <div class="shop-info">
+    <div class="shop-info-head">
+      <div class="shop-tag-row">
+        <span class="shop-tag">{{ listing.category }}</span>
+        {% if not listing.visible %}<span class="pill small">Hidden from shoppers</span>{% endif %}
+      </div>
+      <h1>{{ listing.name }}</h1>
+      {% if listing.description %}<p class="shop-desc">{{ listing.description }}</p>{% endif %}
+    </div>
+
+    <section class="card shop-panel" aria-labelledby="shop-get-h">
+      <h2 id="shop-get-h">What you get</h2>
+      {% if listing.linked %}
+      <div class="table-wrap">
+        <table class="grid shop-contents">
+          <thead><tr><th scope="col">Qty</th><th scope="col">Item</th><th scope="col">In game</th></tr></thead>
+          <tbody>
+          {% for e in listing.linked %}
+          <tr>
+            <td class="mono">{{ e.qty }}</td>
+            <td class="shop-contents-name">{{ e.item.name if e.item else e.name }}</td>
+            <td class="small">
+              {% if e.item %}<div class="dim">{{ e.item.category }}{% if user and user.is_admin %} · <span class="mono faint">#{{ e.item.id }}</span>{% endif %}</div>
+                {% if e.item.description %}<div class="faint">{{ e.item.description }}</div>{% endif %}
+              {% else %}<span class="warn-inline"><span class="dot warn" aria-hidden="true"></span>{{ e.problem }}</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="warn-inline">What this listing contains hasn't been set yet.</p>
       {% endif %}
-      {% if can_coins %}
-      <form method="post" action="{{ url_for('shop.buy', listing_id=listing.id) }}">
-        <input type="hidden" name="csrf" value="{{ csrf_token }}">
-        <input type="hidden" name="currency" value="coins">
-        <button class="btn accent buy-btn" {{ 'disabled' if wallet.balance < listing.price_coins }}>
-          Buy for <b>{{ '{:,}'.format(listing.price_coins) }} {{ coin_name }}</b></button>
-        {% if wallet.balance < listing.price_coins %}<p class="dim small">You have {{ '{:,}'.format(wallet.balance) }}.</p>{% endif %}
-      </form>
+      {% if listing.notes %}<p class="faint small shop-notes">{{ listing.notes }}</p>{% endif %}
+      {% set show_retail = cfg.shop_show_retail == '1' and listing.retail_price %}
+      {% if show_retail or listing.patch %}
+      <dl class="shop-facts">
+        {% if show_retail %}<div><dt>Retail price</dt><dd>{{ listing.retail_price }}</dd></div>{% endif %}
+        {% if listing.patch %}<div><dt>Added in patch</dt><dd class="mono">{{ listing.patch }}</dd></div>{% endif %}
+      </dl>
       {% endif %}
-      {% if not can_gil and not can_coins %}<p class="dim">This isn't for sale right now.</p>{% endif %}
-    {% endif %}
-  </section>
+    </section>
+
+    <section class="card shop-panel buy-card" aria-labelledby="shop-buy-h">
+      <h2 id="shop-buy-h">Buy</h2>
+      {% set can_gil = cfg.shop_gil_enabled == '1' and listing.sell_gil %}
+      {% set can_coins = cfg.shop_coins_enabled == '1' and listing.sell_coins %}
+      {% if not user %}
+        <p><a class="btn accent big" href="{{ url_for('main.login', next=request.path) }}">Sign in to buy</a></p>
+      {% elif not selected %}
+        <p class="dim">You need a character to deliver to.</p>
+      {% elif not listing.ready %}
+        <p class="warn-inline">This can't be bought until {{ 'its contents are set' if not listing.contents else 'its contents are linked to game items' }}.</p>
+      {% else %}
+        <p class="dim small shop-deliver-note">Delivered to <b>{{ selected.name }}</b> by moogle mail: take it from any mailbox in game.
+          {% if characters|length > 1 %}Change the character above.{% endif %}</p>
+        {% if can_gil or can_coins %}
+        <div class="shop-pay">
+          {% if can_gil %}
+          <form method="post" action="{{ url_for('shop.buy', listing_id=listing.id) }}" class="shop-pay-option">
+            <input type="hidden" name="csrf" value="{{ csrf_token }}">
+            <input type="hidden" name="currency" value="gil">
+            <div class="shop-pay-head"><span>Pay with gil</span><span class="faint">You have {{ '{:,}'.format(gil or 0) }}</span></div>
+            <button class="btn big buy-btn" {{ 'disabled' if online or (gil or 0) < listing.price_gil }}>
+              <span>Buy for <b>{{ '{:,}'.format(listing.price_gil) }} gil</b></span></button>
+            {% if online %}<p class="shop-pay-note warn">{{ icon('warn', 'icon sm') }}<span>{{ selected.name }} is logged in: log out to pay with gil.</span></p>
+            {% elif (gil or 0) < listing.price_gil %}<p class="shop-pay-note">{{ selected.name }} needs {{ '{:,}'.format(listing.price_gil - (gil or 0)) }} more gil.</p>
+            {% else %}<p class="shop-pay-note">{{ '{:,}'.format((gil or 0) - listing.price_gil) }} left after this purchase.</p>{% endif %}
+          </form>
+          {% endif %}
+          {% if can_coins %}
+          <form method="post" action="{{ url_for('shop.buy', listing_id=listing.id) }}" class="shop-pay-option">
+            <input type="hidden" name="csrf" value="{{ csrf_token }}">
+            <input type="hidden" name="currency" value="coins">
+            <div class="shop-pay-head"><span>Pay with {{ coin_name }}</span><span class="faint">You have {{ '{:,}'.format(wallet.balance) }}</span></div>
+            <button class="btn accent big buy-btn" {{ 'disabled' if wallet.balance < listing.price_coins }}>
+              <span>Buy for <b>{{ '{:,}'.format(listing.price_coins) }} {{ coin_name }}</b></span></button>
+            {% if wallet.balance < listing.price_coins %}<p class="shop-pay-note">You need {{ '{:,}'.format(listing.price_coins - wallet.balance) }} more.</p>
+            {% else %}<p class="shop-pay-note">{{ '{:,}'.format(wallet.balance - listing.price_coins) }} left after this purchase.</p>{% endif %}
+          </form>
+          {% endif %}
+        </div>
+        {% endif %}
+        {% if not can_gil and not can_coins %}<p class="dim">This isn't for sale right now.</p>{% endif %}
+      {% endif %}
+    </section>
+  </div>
 </div>
 {% endblock %}

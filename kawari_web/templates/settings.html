@@ -1,158 +1,304 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% from "_post.html" import pico, face %}
 {% block title %}Settings · {{ branding.site_name }}{% endblock %}
 {% block content %}
-<h1>Settings</h1>
-<div class="settings">
-  <nav class="settings-nav">
+<h1 class="pf-title">Settings</h1>
+<div class="pf-settings">
+  <nav class="pf-snav" aria-label="Settings">
     {% for key, label, description in pages %}
-    <a href="{{ url_for('social.settings_page', page=key) }}" class="{{ 'on' if page == key }}">
-      <b>{{ label }}</b><span class="dim small">{{ description }}</span>
+    <a href="{{ url_for('social.settings_page', page=key) }}" class="{{ 'on' if page == key }}"
+       {{ 'aria-current=page' if page == key }}>
+      <b>{{ label }}</b><span>{{ description }}</span>
     </a>
     {% endfor %}
   </nav>
 
-  <div class="settings-body">
+  <div class="pf-sbody">
   {% if page == 'profile' %}
-    <section class="card">
-      <h2>Profile</h2>
-      <p class="dim">How you appear to other players.</p>
-      <form method="post" action="{{ url_for('main.edit_profile') }}" enctype="multipart/form-data">
+    <section aria-labelledby="pv-h" class="pf-preview-wrap">
+      <h2 id="pv-h" class="pf-eyebrow">Preview: how others see you</h2>
+      <div class="pf-ident is-preview">
+        <div class="pf-banner" {% if user.banner %}style="background-image:url('{{ url_for('main.static_upload', name=user.banner) }}')"{% endif %}></div>
+        <div class="pf-ident-row">
+          {% if user.avatar %}
+            <img class="pf-avatar" src="{{ url_for('main.static_upload', name=user.avatar) }}" alt="">
+          {% else %}
+            <span class="pf-avatar placeholder" aria-hidden="true">{{ (user.display_name or user.username)[:1]|upper }}</span>
+          {% endif %}
+          <div class="pf-ident-who">
+            <div class="pf-ident-name"><span class="pf-ident-h">{{ user.display_name or user.username }}</span>
+              {% if user.is_admin %}<span class="pill admin small">Administrator</span>{% endif %}</div>
+            <div class="dim">@{{ user.username }}{% if user.created_at %} · Joined {{ user.created_at }}{% endif %}</div>
+          </div>
+        </div>
+        {% if user.bio %}<p class="pf-bio">{{ user.bio }}</p>{% endif %}
+      </div>
+    </section>
+
+    <section class="card pf-scard" aria-labelledby="pf-h">
+      <div class="pf-scard-head">
+        <h2 id="pf-h">Profile</h2>
+        <p class="dim">How you appear to other players.</p>
+      </div>
+      <form method="post" action="{{ url_for('main.edit_profile') }}" enctype="multipart/form-data" class="pf-form">
         <input type="hidden" name="csrf" value="{{ csrf_token }}">
-        <label>Display name <input name="display_name" value="{{ user.display_name }}" maxlength="60"></label>
-        <label>Bio <textarea name="bio" rows="5" maxlength="2000">{{ user.bio }}</textarea></label>
-        <label>Profile picture <input type="file" name="avatar" accept="image/*"></label>
-        <label>Banner art <input type="file" name="banner" accept="image/*"></label>
-        <button class="btn accent">Save profile</button>
+        <label>Display name <input name="display_name" value="{{ user.display_name }}" maxlength="60">
+          <span class="hint">Up to 60 characters.</span></label>
+        <label>Bio <textarea name="bio" rows="5" maxlength="2000">{{ user.bio }}</textarea>
+          <span class="hint">Up to 2,000 characters.</span></label>
+        <div class="pf-uploads">
+          <div class="pf-upload">
+            <span class="pf-upload-title">Profile picture</span>
+            <div class="pf-upload-row">
+              {{ face(user, 'pf-upload-face') }}
+              <label class="filelabel">
+                <span class="filebtn">{{ pico('upload') }}Choose image</span>
+                <input type="file" name="avatar" accept="image/*" data-filecount>
+                <span class="faint small" data-filecount-label><span class="visually-hidden">Profile picture</span></span>
+              </label>
+            </div>
+            <span class="hint">Any image. Shown square.</span>
+          </div>
+          <div class="pf-upload">
+            <span class="pf-upload-title">Banner art</span>
+            <div class="pf-upload-banner" {% if user.banner %}style="background-image:url('{{ url_for('main.static_upload', name=user.banner) }}')"{% endif %}>
+              {% if not user.banner %}<span class="faint small">No banner yet</span>{% endif %}</div>
+            <label class="filelabel">
+              <span class="filebtn">{{ pico('upload') }}Choose image</span>
+              <input type="file" name="banner" accept="image/*" data-filecount>
+              <span class="faint small" data-filecount-label><span class="visually-hidden">Banner art</span></span>
+            </label>
+          </div>
+        </div>
+        <div class="pf-form-foot">
+          <button class="btn accent big">Save profile</button>
+          <a href="{{ url_for('main.profile') }}">View your profile</a>
+        </div>
       </form>
     </section>
 
   {% elif page == 'security' %}
-    <section class="card">
-      <h2>Password</h2>
-      <p class="dim">There is only one account: this changes the password for this site
-         <b>and</b> for the game launcher.</p>
-      <form method="post" action="{{ url_for('social.change_password') }}">
+    <section class="card pf-scard" aria-labelledby="pw-h">
+      <div class="pf-scard-head">
+        <h2 id="pw-h">Password</h2>
+        <p class="dim">You have one account. This changes your password for this site
+           <b class="pf-strong">and</b> for the game launcher.</p>
+      </div>
+      <form method="post" action="{{ url_for('social.change_password') }}" class="pf-form pf-form-narrow">
         <input type="hidden" name="csrf" value="{{ csrf_token }}">
-        <label>Current password <input type="password" name="current_password" required></label>
-        <label>New password <input type="password" name="new_password" required></label>
-        <label>Confirm new password <input type="password" name="confirm_password" required></label>
-        <button class="btn accent">Change password</button>
+        <label>Current password <input type="password" name="current_password" required autocomplete="current-password"></label>
+        <label>New password <input type="password" name="new_password" required autocomplete="new-password"></label>
+        <label>Confirm new password <input type="password" name="confirm_password" required autocomplete="new-password"></label>
+        <div class="pf-form-foot"><button class="btn accent big">Change password</button></div>
       </form>
-      <p class="warn-inline">The game server stores passwords in plain text and compares
-         them literally - that is how Kawari works, and this site cannot be more secure
-         than the server it front-ends. Use a password you do not use anywhere else.</p>
+      <div class="callout warn pf-note" role="note">
+        {{ icon('warn') }}
+        <span>The game server stores passwords in plain text and compares them as-is. That's how
+          Kawari works, and this site can't be more secure than the server behind it. Use a password
+          you don't use anywhere else.</span>
+      </div>
     </section>
-    <section class="card">
-      <h2>Account</h2>
-      <dl class="kv">
-        <dt>Username</dt><dd>{{ user.username }}</dd>
-        <dt>Account id</dt><dd class="mono">{{ user.user_id }}</dd>
-        <dt>Role</dt><dd>{{ 'Administrator' if user.is_admin else 'Player' }}</dd>
-        <dt>Joined</dt><dd>{{ user.created_at }}</dd>
+    <section class="card pf-scard" aria-labelledby="ac-h">
+      <h2 id="ac-h">Account</h2>
+      <dl class="pf-facts">
+        <div><dt>Username</dt><dd>{{ user.username }}</dd></div>
+        <div><dt>Account id</dt><dd class="mono">{{ user.user_id }}</dd></div>
+        <div><dt>Role</dt><dd>{% if user.is_admin %}<span class="pill admin small">Administrator</span>{% else %}Player{% endif %}</dd></div>
+        <div><dt>Joined</dt><dd>{{ user.created_at or '—' }}</dd></div>
       </dl>
     </section>
 
   {% elif page == 'notifications' %}
-    <section class="card">
-      <h2>Notifications</h2>
-      <p class="dim">Turning one off stops it being delivered at all - you will not see
-         it later.</p>
+    {% set hints = {
+      'comment': 'When someone comments on something you posted.',
+      'reply': 'When someone replies under your comment.',
+      'server': 'When the game server goes up or down.',
+      'announcement': 'News posted by the people running the server.',
+      'shop': 'When a purchase arrives by mail in game.'} %}
+    <section class="card pf-scard" aria-labelledby="nt-h">
+      <div class="pf-scard-head">
+        <h2 id="nt-h">Notifications</h2>
+        <p class="dim">Choose what you get told about.</p>
+      </div>
+      <div class="callout pf-note" role="note">
+        {{ icon('info') }}
+        <span>Turning one off stops it being delivered at all. It won't be waiting for you later.</span>
+      </div>
       <form method="post" action="{{ url_for('social.save_notification_prefs') }}">
         <input type="hidden" name="csrf" value="{{ csrf_token }}">
-        {% for kind, label in kinds %}
-        <label class="inline"><input type="checkbox" name="kinds" value="{{ kind }}"
-          {{ 'checked' if prefs[kind] }}> {{ label }}</label>
-        {% endfor %}
-        <p><button class="btn accent">Save notification settings</button></p>
+        <fieldset class="pf-fieldset">
+          <legend class="visually-hidden">Notification types</legend>
+          <ul class="pf-switches">
+            {% for kind, label in kinds %}
+            <li>
+              <label class="pf-switch-row">
+                <span class="pf-kicon kind-{{ kind }}" aria-hidden="true">
+                  {%- if kind == 'announcement' %}{{ icon('megaphone', 'icon sm') }}
+                  {%- elif kind == 'shop' %}{{ icon('bag', 'icon sm') }}
+                  {%- elif kind == 'reply' %}{{ pico('reply') }}
+                  {%- elif kind == 'server' %}{{ pico('server') }}
+                  {%- elif kind == 'comment' %}{{ pico('comment') }}
+                  {%- else %}{{ icon('bell', 'icon sm') }}{% endif -%}
+                </span>
+                <span class="pf-switch-text"><b>{{ label }}</b>
+                  {% if hints.get(kind) %}<span class="faint small">{{ hints[kind] }}</span>{% endif %}</span>
+                <input type="checkbox" role="switch" name="kinds" value="{{ kind }}" {{ 'checked' if prefs[kind] }}>
+                <span class="pf-switch" aria-hidden="true"></span>
+                <span class="pf-switch-state" aria-hidden="true"></span>
+              </label>
+            </li>
+            {% endfor %}
+          </ul>
+        </fieldset>
+        <div class="pf-form-foot"><button class="btn accent big">Save notification settings</button></div>
       </form>
     </section>
 
   {% elif page == 'sync' %}
-    <section class="card">
-      <h2>Character sync</h2>
-      <p class="dim">The Kawari Companion plugin sends your character to this server
-         on a schedule, so your profile stays current without exporting by hand.</p>
+    <section class="card pf-scard" aria-labelledby="sy-h">
+      <div class="pf-scard-head pf-head-row">
+        <div>
+          <h2 id="sy-h">Character sync</h2>
+          <p class="dim">The Kawari Companion plugin sends your character to this server on a schedule,
+             so your profile stays up to date without exporting by hand.{% if token %} Paste the server
+             URL and token below into the plugin.{% endif %}</p>
+        </div>
+        {% if token %}<span class="pill ok">Token active</span>{% else %}<span class="pill">No token</span>{% endif %}
+      </div>
 
       {% if token %}
-        <label>Server URL <input value="{{ base_url }}" readonly onclick="this.select()"></label>
-        <label>Token <input value="{{ token }}" readonly onclick="this.select()"></label>
-        <p class="warn-inline">Anyone holding this token can update the characters on
-           this account. Paste it into the plugin and nowhere else; issue a new one if
-           it leaks.</p>
-        <div class="btnrow">
-          <form method="post" class="inline" action="{{ url_for('api.new_token') }}"
+        <div class="pf-copyfields">
+          <div>
+            <label for="sync-url">Server URL</label>
+            <div class="pf-copyfield">
+              <input id="sync-url" value="{{ base_url }}" readonly onclick="this.select()" class="mono">
+              <button type="button" class="btn" data-copy="{{ base_url }}" aria-label="Copy server URL">{{ icon('copy', 'icon sm') }}</button>
+            </div>
+          </div>
+          <div>
+            <label for="sync-token">Token</label>
+            <div class="pf-copyfield">
+              <input id="sync-token" value="{{ token }}" readonly onclick="this.select()" class="mono">
+              <button type="button" class="btn" data-copy="{{ token }}" aria-label="Copy token">{{ icon('copy', 'icon sm') }}</button>
+            </div>
+          </div>
+        </div>
+        <div class="callout warn pf-note" role="note">
+          {{ icon('warn') }}
+          <span>Anyone holding this token can update the characters on this account. Paste it into the
+            plugin and nowhere else; issue a new one if it leaks.</span>
+        </div>
+        <div class="pf-actions">
+          <form method="post" action="{{ url_for('api.new_token') }}"
                 onsubmit="return confirm('Issue a new token? The current one stops working at once.')">
             <input type="hidden" name="csrf" value="{{ csrf_token }}">
-            <button class="btn">Issue a new token</button>
+            <button class="btn">{{ pico('refresh') }}Issue a new token</button>
           </form>
-          <form method="post" class="inline" action="{{ url_for('api.drop_token') }}"
+          <form method="post" action="{{ url_for('api.drop_token') }}"
                 onsubmit="return confirm('Revoke the token? Syncing stops until you issue another.')">
             <input type="hidden" name="csrf" value="{{ csrf_token }}">
-            <button class="btn danger">Revoke</button>
+            <button class="btn danger">{{ pico('trash') }}Revoke</button>
           </form>
+          <span class="faint small">A new token stops the old one at once. Revoking stops syncing until you issue another.</span>
         </div>
       {% else %}
-        <p>No token yet. Issue one, then paste it into the plugin along with the
-           server URL.</p>
+        <p>No token yet. Issue one, then paste it into the plugin along with the server URL.</p>
         <form method="post" action="{{ url_for('api.new_token') }}">
           <input type="hidden" name="csrf" value="{{ csrf_token }}">
-          <button class="btn accent">Issue a sync token</button>
+          <button class="btn accent big">Issue a sync token</button>
         </form>
       {% endif %}
     </section>
 
-    <section class="card">
-      <h2>What a sync may change</h2>
+    <section class="card pf-scard" aria-labelledby="sec-h">
+      <div class="pf-scard-head">
+        <h2 id="sec-h">What a sync may change</h2>
+        <p class="dim">Untick anything you want to keep as it is on the server.</p>
+      </div>
       <form method="post" action="{{ url_for('api.save_sections') }}">
         <input type="hidden" name="csrf" value="{{ csrf_token }}">
-        {% for section in all_sections if section.key in allowed %}
-          <label class="inline"><input type="checkbox" name="sections" value="{{ section.key }}"
-            {{ 'checked' if section.key in sections }}> {{ section.label }}</label>
-        {% endfor %}
-        <p class="hint">Your character is never renamed by a sync, and a sync never
-           creates a character — if the name does not match one on this account it is
-           refused. A snapshot is taken before every sync, so it is undoable from the
-           dashboard. At most one sync every {{ min_interval }} seconds.</p>
-        <button class="btn accent">Save</button>
+        <fieldset class="pf-fieldset">
+          <legend class="visually-hidden">Sections a sync may change</legend>
+          <div class="pf-checkgrid">
+            {% for section in all_sections if section.key in allowed %}
+              <label class="pf-checkcard {{ 'is-optin' if section.key in opt_in }}">
+                <input type="checkbox" name="sections" value="{{ section.key }}" {{ 'checked' if section.key in sections }}>
+                <span><span class="pf-checkcard-title"><b>{{ section.label }}</b>{% if section.key in opt_in %} <span class="pill warn small">Opt-in</span>{% endif %}</span>
+                  {% if section.detail %}<span class="faint small">{{ section.detail }}</span>{% endif %}</span>
+              </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+        <div class="callout pf-note">
+          {{ icon('info') }}
+          <ul class="pf-rules">
+            <li>A sync never renames your character and never creates one. If the name doesn't match a
+              character on this account, the sync is refused.</li>
+            <li>A snapshot is taken before every sync, so it can be undone from the dashboard.</li>
+            <li>At most one sync every <b>{{ min_interval }} seconds</b>.</li>
+          </ul>
+        </div>
+        <div class="pf-form-foot"><button class="btn accent big">Save</button></div>
       </form>
     </section>
 
-    <section class="card">
-      <h2>Last sync</h2>
+    <section class="card pf-scard" aria-labelledby="ls-h">
+      <div class="pf-head-row">
+        <h2 id="ls-h">Last sync</h2>
+        {% if last %}<span class="pill {{ 'ok' if last.ok else 'err' }}">{{ 'Succeeded' if last.ok else 'Failed' }}</span>{% endif %}
+      </div>
       {% if last %}
-        <p class="line {{ 'ok' if last.ok else 'err' }}">
-          {{ last.at }} —
-          {% if last.ok %}updated {{ last.character }}: {{ last.columns }} column(s)
-            across {{ last.tables | join(', ') }}
-          {% else %}failed: {{ last.error }}{% endif %}
-        </p>
-        {% if last.notes %}<ul class="dim small">{% for note in last.notes %}<li>{{ note }}</li>{% endfor %}</ul>{% endif %}
+        <dl class="pf-tiles">
+          <div><dt>When</dt><dd>{{ last.at }}</dd></div>
+          {% if last.ok %}
+          <div><dt>Character</dt><dd>{{ last.character }}</dd></div>
+          <div><dt>Columns updated</dt><dd class="num">{{ last.columns }}</dd></div>
+          {% endif %}
+        </dl>
+        {% if last.ok %}
+          <p class="dim">Across tables: <span class="mono">{{ last.tables | join(', ') }}</span></p>
+        {% else %}
+          <p class="line err">{{ last.error }}</p>
+        {% endif %}
+        {% if last.notes %}
+          <div class="pf-notes"><span class="faint small">Notes</span>
+            <ul class="dim small">{% for note in last.notes %}<li>{{ note }}</li>{% endfor %}</ul></div>
+        {% endif %}
       {% else %}
         <p class="dim">Nothing has synced yet.</p>
       {% endif %}
     </section>
 
   {% elif page == 'characters' %}
-    <section class="card">
-      <h2>Character visibility</h2>
-      <p class="dim">Characters are hidden from other players by default. Publishing one
-         shows it, and its stats, on your profile.</p>
-      <table class="grid">
-        <tr><th>Character</th><th>Visible to others</th><th></th></tr>
+    <section class="card pf-scard" aria-labelledby="cv-h">
+      <div class="pf-scard-head">
+        <h2 id="cv-h">Character visibility</h2>
+        <p class="dim">Your characters are hidden from other players until you publish them. A published
+           character, and its stats, shows on <a href="{{ url_for('main.profile', username=user.username, tab='characters') }}">your profile</a>.</p>
+      </div>
+      <ul class="pf-vislist">
         {% for c in characters %}
-        <tr>
-          <td>{{ c.name }}</td>
-          <td>{{ 'Yes' if c.is_public else 'No' }}</td>
-          <td>
-            <form method="post" action="{{ url_for('main.character_visibility', content_id=c.content_id) }}">
-              <input type="hidden" name="csrf" value="{{ csrf_token }}">
-              <input type="hidden" name="public" value="{{ '0' if c.is_public else '1' }}">
-              <button class="btn small">{{ 'Hide' if c.is_public else 'Publish' }}</button>
-            </form>
-          </td>
-        </tr>
-        {% else %}<tr><td colspan="3" class="dim">No characters on this account yet.</td></tr>{% endfor %}
-      </table>
+        <li>
+          <span class="pf-crest sm" aria-hidden="true">{{ c.name[:1]|upper }}</span>
+          <div class="pf-vis-who">
+            <a href="{{ url_for('main.profile', username=user.username, tab='characters') }}#char-{{ c.content_id }}">{{ c.name }}</a>
+            {% if c.summary and c.summary.current_class %}
+              <span class="faint small">Level {{ c.summary.current_level or '—' }} {{ c.summary.current_class }}</span>
+            {% endif %}
+          </div>
+          <span class="pill {{ 'ok' if c.is_public }}">{{ 'Visible' if c.is_public else 'Hidden' }}</span>
+          <form method="post" action="{{ url_for('main.character_visibility', content_id=c.content_id) }}">
+            <input type="hidden" name="csrf" value="{{ csrf_token }}">
+            <input type="hidden" name="public" value="{{ '0' if c.is_public else '1' }}">
+            <button class="btn small {{ 'accent' if not c.is_public }}" aria-label="{{ 'Hide' if c.is_public else 'Publish' }} {{ c.name }}">{{ 'Hide' if c.is_public else 'Publish' }}</button>
+          </form>
+        </li>
+        {% else %}
+        <li class="dim">No characters on this account yet.</li>
+        {% endfor %}
+      </ul>
+      <p class="hint">Characters come from the game server. A new character appears here after you create it in game.</p>
     </section>
   {% endif %}
   </div>

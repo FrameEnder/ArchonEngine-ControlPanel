@@ -1,29 +1,73 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% from "_post.html" import pico %}
 {% block title %}Notifications · {{ branding.site_name }}{% endblock %}
 {% block content %}
-<h1>Notifications</h1>
-<div class="btnrow">
-  <form method="post" class="inline" action="{{ url_for('social.mark_notifications_read') }}">
-    <input type="hidden" name="csrf" value="{{ csrf_token }}">
-    <button class="btn">Mark all read</button>
-  </form>
-  <form method="post" class="inline" action="{{ url_for('social.clear_notifications') }}"
-        onsubmit="return confirm('Delete all of your notifications?')">
-    <input type="hidden" name="csrf" value="{{ csrf_token }}">
-    <button class="btn danger">Clear all</button>
-  </form>
-  <a class="btn" href="{{ url_for('social.settings_page', page='notifications') }}">Settings</a>
+{% set kind_tag = {'comment': 'Comment', 'reply': 'Reply', 'announcement': 'Announcement',
+                   'shop': 'Shop', 'server': 'Server'} %}
+<div class="pf-narrow">
+<div class="page-head">
+  <div>
+    <h1>Notifications</h1>
+    <p>{% if counts.unread %}You have <b class="pf-strong">{{ counts.unread }} unread</b>.{% else %}You're all caught up.{% endif %}</p>
+  </div>
+  <div class="pf-actions">
+    <form method="post" action="{{ url_for('social.mark_notifications_read') }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <button class="btn">{{ icon('check', 'icon sm') }}Mark all read</button>
+    </form>
+    <form method="post" action="{{ url_for('social.clear_notifications') }}"
+          onsubmit="return confirm('Delete all of your notifications?')">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <button class="btn danger">{{ pico('trash') }}Clear all</button>
+    </form>
+  </div>
 </div>
 
-<section class="card">
-  {% for n in items %}
-  <a class="notif row {{ 'unread' if not n.read_at }}" href="{{ n.link or '#' }}">
-    <span class="kind">{{ n.kind }}</span>
-    <span><b>{{ n.title }}</b>{% if n.body %}<br><span class="dim">{{ n.body }}</span>{% endif %}</span>
-    <span class="dim small">{{ n.created_at }}</span>
-  </a>
-  {% else %}
-  <p class="dim">Nothing here yet.</p>
+<nav class="chips pf-chips" aria-label="Filter notifications">
+  {% for key, label in chips %}
+    <a href="{{ url_for('social.notifications', kind=key) if key else url_for('social.notifications') }}"
+       class="{{ 'on' if kind == key }}" {{ 'aria-current=page' if kind == key }}>{{ label }}
+      <span class="pf-count">{{ counts.get(key, 0) }}</span></a>
   {% endfor %}
+</nav>
+
+{% for label, rows in groups %}
+<section class="pf-ngroup" aria-labelledby="ng-{{ loop.index }}">
+  <h2 id="ng-{{ loop.index }}" class="pf-eyebrow">{{ label }}</h2>
+  <ul class="pf-nlist">
+    {% for n in rows %}
+    <li>
+      <a class="pf-notif {{ 'is-unread' if not n.read_at }}" href="{{ n.link or '#' }}">
+        <span class="pf-ndot" aria-hidden="true"></span>
+        <span class="pf-kicon kind-{{ n.kind }}" aria-hidden="true">
+          {%- if n.kind == 'announcement' %}{{ icon('megaphone', 'icon sm') }}
+          {%- elif n.kind == 'shop' %}{{ icon('bag', 'icon sm') }}
+          {%- elif n.kind == 'reply' %}{{ pico('reply') }}
+          {%- elif n.kind == 'server' %}{{ pico('server') }}
+          {%- elif n.kind == 'comment' %}{{ pico('comment') }}
+          {%- else %}{{ icon('bell', 'icon sm') }}{% endif -%}
+        </span>
+        <span class="pf-ntext">
+          <span class="pf-ntitle"><b>{{ n.title }}</b>
+            <span class="pf-tag">{{ kind_tag.get(n.kind, n.kind) }}</span></span>
+          {% if n.body %}<span class="dim">{{ n.body }}</span>{% endif %}
+        </span>
+        <span class="faint small pf-ntime">{{ n.created_at }}{% if not n.read_at %}<span class="visually-hidden">, unread</span>{% endif %}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
 </section>
+{% else %}
+<div class="card"><p class="dim pf-empty">
+  {% if kind %}Nothing here. <a href="{{ url_for('social.notifications') }}">Show all notifications</a>{% else %}Nothing here yet.{% endif %}</p></div>
+{% endfor %}
+
+<div class="callout pf-callout-row">
+  {{ icon('setup') }}
+  <span>Choose which notifications you get.</span>
+  <a href="{{ url_for('social.settings_page', page='notifications') }}">Notification settings</a>
+</div>
+</div>
 {% endblock %}

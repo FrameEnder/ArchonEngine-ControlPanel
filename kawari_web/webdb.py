@@ -88,6 +88,18 @@ CREATE TABLE IF NOT EXISTS notification_pref (
     enabled INTEGER NOT NULL DEFAULT 1,
     PRIMARY KEY (user_id, kind)
 );
+
+-- Every announcement an administrator sent (the notifications themselves are
+-- per account and can be cleared, so this is the record of what went out).
+CREATE TABLE IF NOT EXISTS announcement (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    title      TEXT    NOT NULL,
+    body       TEXT    NOT NULL DEFAULT '',
+    sent_by    INTEGER NOT NULL DEFAULT 0,
+    recipients INTEGER NOT NULL DEFAULT 0,
+    accounts   INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT    NOT NULL
+);
 """
 
 # Notification kinds, with the label shown in settings.
@@ -506,6 +518,31 @@ def notify_all(path: Path, kind: str, title: str, body: str = "", link: str = ""
         if notify(path, profile_row["user_id"], kind, title, body, link):
             sent += 1
     return sent
+
+
+def record_announcement(path: Path, title: str, body: str, sent_by: int,
+                        recipients: int, accounts: int) -> int:
+    conn = connect(path)
+    try:
+        cur = conn.execute("INSERT INTO announcement (title, body, sent_by, recipients, accounts, "
+                           "created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                           (title, body, sent_by, recipients, accounts, _now()))
+        conn.commit()
+        return int(cur.lastrowid)
+    finally:
+        conn.close()
+
+
+def announcements(path: Path, limit: int = 50) -> list:
+    """Sent announcements, newest first, with the sender's names."""
+    conn = connect(path)
+    try:
+        return [dict(r) for r in conn.execute(
+            "SELECT a.*, p.username AS sender, p.display_name AS sender_display "
+            "FROM announcement a LEFT JOIN profile p ON p.user_id = a.sent_by "
+            "ORDER BY a.id DESC LIMIT ?", (limit,))]
+    finally:
+        conn.close()
 
 
 def notifications_for(path: Path, user_id: int, limit: int = 50,

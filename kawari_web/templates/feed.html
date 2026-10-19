@@ -1,14 +1,72 @@
 {% extends "base.html" %}
-{% from "_post.html" import post_card, composer with context %}
-{% block title %}Feed · {{ branding.site_name }}{% endblock %}
+{% from "_post.html" import post_card, composer, face with context %}
+{% block title %}Community · {{ branding.site_name }}{% endblock %}
 {% block content %}
-<h1>Feed</h1>
-{% if user %}
-  {{ composer(url_for('social.create_post'), url_for('social.feed')) }}
-{% else %}
-  <p class="dim"><a href="{{ url_for('main.login') }}">Sign in</a> to post.</p>
-{% endif %}
-{% for post in posts %}{{ post_card(post) }}{% else %}
-  <div class="card"><p class="dim">No posts yet. Be the first.</p></div>
-{% endfor %}
+<div class="page-head">
+  <div>
+    <h1>Community</h1>
+    <p>Screenshots, stories and news from everyone on the server.</p>
+  </div>
+</div>
+
+<div class="split pf-split">
+  <div class="split-main pf-stack">
+    {% if user %}
+      {{ composer(url_for('social.create_post'), url_for('social.feed')) }}
+    {% else %}
+      <div class="card pf-signin"><p class="dim"><a href="{{ url_for('main.login') }}">Sign in</a> to post.</p></div>
+    {% endif %}
+
+    <nav class="chips pf-chips" aria-label="Filter posts">
+      {% for key, label in filters %}
+        <a href="{{ url_for('social.feed', show=key) if key != 'all' else url_for('social.feed') }}"
+           class="{{ 'on' if show == key }}" {{ 'aria-current=page' if show == key }}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+
+    {% for post in posts %}{{ post_card(post) }}{% else %}
+      <div class="card"><p class="dim pf-empty">
+        {% if show == 'images' %}No posts with screenshots yet.{% else %}No posts yet. Be the first.{% endif %}</p></div>
+    {% endfor %}
+  </div>
+
+  <aside class="split-side pf-stack">
+    <section class="card pf-side" aria-labelledby="online-h">
+      <div class="pf-side-head">
+        <h2 id="online-h">Who's online</h2>
+        {% if online is not none %}<span class="faint small">{{ online|length }} in game</span>{% endif %}
+      </div>
+      {% if online is none %}
+        <p class="dim pf-empty">The game server is not running.</p>
+      {% elif online %}
+        <ul class="pf-people">
+          {% for p in online %}
+          <li><a href="{{ url_for('main.profile', username=p.username) }}">
+            {{ face(p, 'avatar-xs') }}
+            <span class="pf-people-name">{{ p.display_name or p.username }}</span>
+            <span class="dot ok" aria-hidden="true"></span><span class="visually-hidden">in game</span>
+          </a></li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="dim pf-empty">Nobody is in game right now.</p>
+      {% endif %}
+    </section>
+
+    {% if announcements %}
+    <section class="card pf-side" aria-labelledby="ann-h">
+      <h2 id="ann-h">Announcements</h2>
+      <ul class="pf-ann">
+        {% for a in announcements %}
+        <li>
+          <b>{{ a.title }}</b>
+          {% if a.body %}<span class="dim">{{ a.body }}</span>{% endif %}
+          <span class="faint small">{{ a.created_at }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </aside>
+</div>
 {% endblock %}

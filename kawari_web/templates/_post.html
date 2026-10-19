@@ -1,38 +1,89 @@
+{# Posts: the card, the composer, and the few stroke icons the people pages use
+   that _icons.html does not have. Home imports post_card from here too. #}
+
+{% macro pico(name, cls='icon sm') -%}
+<svg class="{{ cls }}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+{%- if name == 'comment' -%}<path d="M4 5h16v11H9l-5 4z"/>
+{%- elif name == 'reply' -%}<path d="M10 8 5 12l5 4"/><path d="M5 12h9a5 5 0 0 1 5 5v1"/>
+{%- elif name == 'server' -%}<path d="M4 4h16v6H4zM4 14h16v6H4z"/><path d="M8 7h.01M8 17h.01"/>
+{%- elif name == 'edit' -%}<path d="M4 20h4L19 9l-4-4L4 16z"/>
+{%- elif name == 'trash' -%}<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>
+{%- elif name == 'image' -%}<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>
+{%- elif name == 'more' -%}<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>
+{%- elif name == 'back' -%}<path d="m15 6-6 6 6 6"/>
+{%- elif name == 'upload' -%}<path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+{%- elif name == 'refresh' -%}<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/>
+{%- endif -%}
+</svg>
+{%- endmacro %}
+
+{# A person's picture, or their initial on a tinted square. #}
+{% macro face(person, cls='avatar-sm') -%}
+{% if person.avatar %}
+  <img class="{{ cls }}" src="{{ url_for('main.static_upload', name=person.avatar) }}" alt="">
+{% else %}
+  <span class="{{ cls }} placeholder" aria-hidden="true">{{ (person.display_name or person.username or '?')[:1]|upper }}</span>
+{% endif %}
+{%- endmacro %}
+
 {# One post. `compact` shows it as a feed card linking to the detail page. #}
 {% macro post_card(post, compact=true) %}
-<article class="card post">
-  <header class="post-head">
-    {% if post.avatar %}
-      <img class="avatar-sm" src="{{ url_for('main.static_upload', name=post.avatar) }}" alt="">
-    {% else %}
-      <span class="avatar-sm placeholder">{{ (post.display_name or post.username or '?')[:1]|upper }}</span>
-    {% endif %}
-    <div>
+<article class="card post pf-post{{ ' is-full' if not compact }}">
+  <header class="post-head pf-post-head">
+    {{ face(post, 'avatar-sm pf-face') }}
+    <div class="pf-post-who">
       <a class="author" href="{{ url_for('main.profile', username=post.username) }}">{{ post.display_name or post.username }}</a>
-      <span class="dim small">{{ post.created_at }}{% if post.edited_at %} · edited{% endif %}</span>
+      <span class="faint small">{{ post.created_at }}{% if post.edited_at %} · edited{% endif %}</span>
     </div>
     {% if user and (user.user_id == post.user_id or user.is_admin) %}
-    <div class="post-actions">
+    <div class="post-actions pf-post-actions">
+      {% if compact %}
+      {# One menu holding both actions, as a <details> so it needs no JavaScript. #}
+      <details class="menu pf-menu">
+        <summary class="pf-iconbtn" aria-label="Post options: {{ 'edit or delete' if user.user_id == post.user_id else 'delete' }}">{{ pico('more') }}</summary>
+        <div class="dropdown wide pf-menu-panel">
+          {% if user.user_id == post.user_id %}
+          <form method="post" action="{{ url_for('social.edit_post', post_id=post.id) }}">
+            <input type="hidden" name="csrf" value="{{ csrf_token }}">
+            <label class="pf-menu-label">Edit post
+              <textarea name="body" rows="4" maxlength="2000">{{ post.body }}</textarea>
+            </label>
+            <button class="btn small accent">Save</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{{ url_for('social.delete_post', post_id=post.id) }}"
+                class="pf-menu-sep" onsubmit="return confirm('Delete this post and its comments?')">
+            <input type="hidden" name="csrf" value="{{ csrf_token }}">
+            <button class="btn small danger">{{ pico('trash') }}Delete post</button>
+          </form>
+        </div>
+      </details>
+      {% else %}
       {% if user.user_id == post.user_id %}
-      <details class="inlineedit">
-        <summary class="linkbtn">Edit</summary>
-        <form method="post" action="{{ url_for('social.edit_post', post_id=post.id) }}">
-          <input type="hidden" name="csrf" value="{{ csrf_token }}">
-          <textarea name="body" rows="4" maxlength="2000">{{ post.body }}</textarea>
-          <button class="btn small accent">Save</button>
-        </form>
+      <details class="menu pf-menu">
+        <summary class="btn small pf-sumbtn">{{ pico('edit') }}Edit</summary>
+        <div class="dropdown wide pf-menu-panel">
+          <form method="post" action="{{ url_for('social.edit_post', post_id=post.id) }}">
+            <input type="hidden" name="csrf" value="{{ csrf_token }}">
+            <label class="pf-menu-label">Edit post
+              <textarea name="body" rows="5" maxlength="2000">{{ post.body }}</textarea>
+            </label>
+            <button class="btn small accent">Save</button>
+          </form>
+        </div>
       </details>
       {% endif %}
       <form method="post" action="{{ url_for('social.delete_post', post_id=post.id) }}"
             onsubmit="return confirm('Delete this post and its comments?')">
         <input type="hidden" name="csrf" value="{{ csrf_token }}">
-        <button class="linkbtn danger">Delete</button>
+        <button class="btn small danger">{{ pico('trash') }}Delete</button>
       </form>
+      {% endif %}
     </div>
     {% endif %}
   </header>
 
-  {% if post.body %}<p class="post-body">{{ post.body }}</p>{% endif %}
+  {% if post.body %}<p class="post-body pf-post-body">{{ post.body }}</p>{% endif %}
 
   {% if post.images %}
   {# The anchors are real links, so without JavaScript an image still opens.
@@ -48,25 +99,31 @@
   </div>
   {% endif %}
 
-  <footer class="post-foot">
-    <a href="{{ url_for('social.post_detail', post_id=post.id) }}">
+  <footer class="post-foot pf-post-foot">
+    <a class="pf-chip" href="{{ url_for('social.post_detail', post_id=post.id) }}">{{ pico('comment') }}
       {{ post.comment_count }} comment{{ '' if post.comment_count == 1 else 's' }}</a>
   </footer>
 </article>
 {% endmacro %}
 
 {% macro composer(action, back='') %}
-<section class="card composer">
+<section class="card composer pf-composer">
   <form method="post" action="{{ action }}" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
     <input type="hidden" name="back" value="{{ back }}">
-    <textarea name="body" rows="3" maxlength="2000"
-              placeholder="Share something with the server..."></textarea>
-    <div class="composer-foot">
+    <div class="pf-composer-row">
+      {% if user %}{{ face(user, 'avatar-sm pf-face') }}{% endif %}
+      <label class="pf-composer-text">
+        <span class="visually-hidden">Write a post</span>
+        <textarea name="body" rows="3" maxlength="2000"
+                  placeholder="Share something with the server..."></textarea>
+      </label>
+    </div>
+    <div class="composer-foot pf-composer-foot">
       <label class="filelabel">
-        <span class="filebtn">Add images</span>
+        <span class="filebtn">{{ pico('image') }}Add images</span>
         <input type="file" name="images" accept="image/*" multiple data-filecount>
-        <span class="dim small" data-filecount-label>Up to 4 images, 2000 characters</span>
+        <span class="faint small" data-filecount-label>Up to 4 images, 2,000 characters</span>
       </label>
       <button class="btn accent" type="submit">Post</button>
     </div>

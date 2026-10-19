@@ -1,4 +1,16 @@
 {% extends "base.html" %}
 {% block title %}{{ code }} · {{ branding.site_name }}{% endblock %}
-{% block content %}<section class="card"><h1>{{ code }}</h1><p>{{ message }}</p>
-<p><a class="btn" href="{{ url_for('main.home') }}">Back to Home</a></p></section>{% endblock %}
+{% block content %}
+<div class="entry-error">
+  <section class="card">
+    <svg class="entry-error-mark" viewBox="0 0 28 28" aria-hidden="true" focusable="false"><path d="M14 2 L24 14 L14 26 L4 14 Z" fill="none" stroke="var(--accent)" stroke-width="1.6"/><path d="M14 8 L19 14 L14 20 L9 14 Z" fill="none" stroke="var(--border-strong)" stroke-width="1.6"/></svg>
+    <h1>{{ code }}</h1>
+    {% if code == 404 %}<p class="entry-error-title">This page wandered off</p>{% endif %}
+    <p class="dim">{{ message }}</p>
+    <div class="entry-error-actions">
+      <a class="btn accent big" href="{{ url_for('main.home') }}">Back to Home</a>
+      <a href="{{ url_for('main.connect') }}">How to connect &rarr;</a>
+    </div>
+  </section>
+</div>
+{% endblock %}

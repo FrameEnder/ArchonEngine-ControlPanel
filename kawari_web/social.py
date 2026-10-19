@@ -8,6 +8,8 @@ so changing it here changes what you type into the launcher.
 
 from __future__ import annotations
 
+import time
+
 from flask import (
     Blueprint, abort, current_app, flash, g, redirect, render_template, request,
     url_for,
@@ -41,12 +43,36 @@ def _display(profile: dict) -> str:
 # ════════════════════════════════════════════════════════════════════════════
 #  Feed
 # ════════════════════════════════════════════════════════════════════════════
+FEED_FILTERS = [("all", "All"), ("images", "Screenshots")]
+
+
 @social.route("/feed")
 def feed():
     settings = _settings()
-    return render_template("feed.html",
-                           posts=webdb.recent_posts(settings.webapp_db, 30),
+    show = request.args.get("show", "all")
+    if show not in dict(FEED_FILTERS):
+        show = "all"
+    if show == "images":
+        # Posts carry their images after loading, so filter a wider window.
+        posts = [p for p in webdb.recent_posts(settings.webapp_db, 200) if p["images"]][:30]
+    else:
+        posts = webdb.recent_posts(settings.webapp_db, 30)
+    return render_template("feed.html", posts=posts, show=show, filters=FEED_FILTERS,
+                           online=_online_profiles(settings),
+                           announcements=webdb.announcements(settings.webapp_db, 3),
                            post_max=webdb.POST_MAX)
+
+
+def _online_profiles(settings) -> list | None:
+    """Players with a character in game, for the feed's sidebar; None when the
+    server isn't known to be running. is_online can be left set by a crash, so it
+    is only believed while the container runs (the same rule as Home and the shop)."""
+    from . import stats
+    from .app import _users_in_game
+    if not stats.server_up(settings, current_app.config["PODMAN"]):
+        return None
+    ids = _users_in_game(settings)
+    return [p for p in webdb.all_profiles(settings.webapp_db) if p["user_id"] in ids]
 
 
 @social.route("/post", methods=["POST"])
@@ -180,10 +206,38 @@ def delete_comment(comment_id: int):
 @social.route("/notifications")
 @auth.login_required
 def notifications():
+    """The list, optionally narrowed by ?kind= to unread ones or one kind."""
     settings = _settings()
+    every = webdb.notifications_for(settings.webapp_db, g.user["user_id"], 100)
+    labels = dict(NOTIFICATION_KIND_LABELS)
+    kind = request.args.get("kind", "")
+    if kind != "unread" and kind not in labels:
+        kind = ""
+    counts = {"": len(every), "unread": sum(1 for n in every if not n["read_at"])}
+    for n in every:
+        counts[n["kind"]] = counts.get(n["kind"], 0) + 1
+    # Chips: All and Unread always, then only the kinds this list actually has.
+    chips = [("", "All"), ("unread", "Unread")] + [
+        (key, label) for key, label in NOTIFICATION_KIND_LABELS if counts.get(key)]
+    if kind == "unread":
+        items = [n for n in every if not n["read_at"]]
+    elif kind:
+        items = [n for n in every if n["kind"] == kind]
+    else:
+        items = every
+    today = time.strftime("%Y-%m-%d")
+    groups = [("Today", [n for n in items if n["created_at"].startswith(today)]),
+              ("Earlier", [n for n in items if not n["created_at"].startswith(today)])]
     return render_template(
-        "notifications.html",
-        items=webdb.notifications_for(settings.webapp_db, g.user["user_id"], 100))
+        "notifications.html", items=items, kind=kind, chips=chips, counts=counts,
+        labels=labels, groups=[(label, rows) for label, rows in groups if rows])
+
+
+# Short names for each notification kind, for the list's chips and tags.
+NOTIFICATION_KIND_LABELS = [
+    ("announcement", "Announcements"), ("reply", "Replies"), ("comment", "Comments"),
+    ("shop", "Shop"), ("server", "Server"),
+]
 
 
 @social.route("/notifications/read", methods=["POST"])
@@ -209,10 +263,10 @@ def clear_notifications():
 # ════════════════════════════════════════════════════════════════════════════
 SETTINGS_PAGES = [
     ("profile", "Profile", "Name, bio, picture and banner"),
-    ("security", "Security", "Password for this site and the game"),
+    ("security", "Password & account", "Password for this site and the game"),
     ("notifications", "Notifications", "What you get told about"),
-    ("characters", "Characters", "Which of your characters others can see"),
     ("sync", "Character sync", "Live updates from the companion plugin"),
+    ("characters", "Character visibility", "Which characters others can see"),
 ]
 
 
@@ -235,6 +289,7 @@ def settings_page(page: str = "profile"):
         context["sections"] = syncapi.sync_sections(db, g.user["user_id"])
         context["all_sections"] = auracite.SECTIONS
         context["allowed"] = syncapi.ALLOWED_SECTIONS
+        context["opt_in"] = syncapi.ALLOWED_SECTIONS - set(syncapi.DEFAULT_SECTIONS)
         context["last"] = syncapi.last_sync(db, g.user["user_id"])
         context["base_url"] = request.url_root.rstrip("/")
         context["min_interval"] = syncapi.MIN_SECONDS_BETWEEN_SYNCS
@@ -242,8 +297,11 @@ def settings_page(page: str = "profile"):
         characters = auth.characters_for(settings.world_db, settings.login_db,
                                          g.user["user_id"])
         public = webdb.public_characters(settings.webapp_db, g.user["user_id"])
+        from . import stats
         for character in characters:
             character["is_public"] = character["content_id"] in public
+            character["summary"] = stats.character_detail(
+                settings, character["content_id"]).get("summary", {})
         context["characters"] = characters
     return render_template("settings.html", **context)
 

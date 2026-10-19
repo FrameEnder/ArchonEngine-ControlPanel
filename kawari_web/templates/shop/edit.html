@@ -1,4 +1,5 @@
 {% extends "dashboard/_layout.html" %}
+{% from "_icons.html" import icon %}
 {% block title %}{{ 'Edit ' ~ listing.name if listing.id else 'New listing' }} · Shop · {{ branding.site_name }}{% endblock %}
 {% block page_title %}{{ listing.name if listing.id else 'New listing' }}{% endblock %}
 {% block page_actions %}{% if listing.id %}<a class="btn" href="{{ url_for('shop.item', listing_id=listing.id) }}">View in shop</a>{% endif %}{% endblock %}
@@ -35,6 +36,7 @@
   <div class="field"><label for="notes">Notes</label><textarea id="notes" name="notes" rows="2">{{ listing.notes }}</textarea></div>
   <div class="field"><span></span><label class="inline"><input type="checkbox" name="visible" {{ 'checked' if listing.visible }}> Shown in the shop</label></div>
   <button class="btn accent">{{ 'Save' if listing.id else 'Add listing' }}</button>
+  {% if not listing.id %}<p class="hint">Pictures can be added once the listing is saved.</p>{% endif %}
 </form>
 
 <div>
@@ -51,6 +53,61 @@
       {% endfor %}
       </ul>
     {% else %}<p class="dim">No contents yet.</p>{% endif %}
+  </section>
+  {% endif %}
+
+  {% if listing.id %}
+  <section class="card shop-pics" id="pictures" aria-labelledby="pictures-h">
+    <h2 id="pictures-h">Pictures</h2>
+    <div class="shop-pics-now">
+      <div class="shop-thumb shop-pics-thumb {{ 'is-cover' if pictures.cover else ('is-icon' if pictures.thumb else 'is-empty') }}">
+        {% if pictures.thumb %}<img src="{{ pictures.thumb }}" alt="" {{ 'width=80 height=80' if not pictures.cover }}>
+        {% else %}{{ icon('bag') }}{% endif %}
+      </div>
+      <div>
+        <b>Thumbnail: {{ 'the cover upload' if pictures.cover else ('the game icon' if pictures.thumb else 'none') }}</b>
+        <p class="hint">{% if pictures.cover %}The first image below is the cover: it's the thumbnail in the shop and leads the gallery.
+          {% elif pictures.thumb %}The first linked item's icon, from the server's game install. Upload an image to use as the cover instead.
+          {% else %}The shop shows a plain tile. Upload an image, or <a href="{{ url_for('shop.manage') }}">fetch the item icons</a> once the contents are linked.{% endif %}</p>
+      </div>
+    </div>
+
+    {% if images %}
+    <ul class="shop-pics-list" role="list">
+      {% for img in images %}
+      <li>
+        <a href="{{ url_for('main.static_upload', name=img.file) }}" class="shop-pics-img">
+          <img src="{{ url_for('main.static_upload', name=img.file) }}" alt="Image {{ loop.index }}" loading="lazy"></a>
+        <div class="shop-pics-actions">
+          {% if loop.first %}<span class="pill small ok">Cover</span>
+          {% else %}
+          <form method="post" action="{{ url_for('shop.image_action', listing_id=listing.id, image_id=img.id, action='cover') }}">
+            <input type="hidden" name="csrf" value="{{ csrf_token }}">
+            <button class="btn small">Make cover</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{{ url_for('shop.image_action', listing_id=listing.id, image_id=img.id, action='delete') }}"
+                onsubmit="return confirm('Remove this image?')">
+            <input type="hidden" name="csrf" value="{{ csrf_token }}">
+            <button class="btn small danger" aria-label="Remove image {{ loop.index }}">Remove</button>
+          </form>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if images|length < max_images %}
+    <form method="post" enctype="multipart/form-data" action="{{ url_for('shop.add_images', listing_id=listing.id) }}" class="shop-pics-upload">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label for="shop-images">Add images</label>
+      <input id="shop-images" type="file" name="images" multiple accept="image/*">
+      <p class="hint">{{ images|length }} of {{ max_images }} used. Up to 4 MB each; the first one added becomes the cover when there's none.</p>
+      <button class="btn">Upload</button>
+    </form>
+    {% else %}
+    <p class="hint">This listing has its {{ max_images }} images: remove one to add another.</p>
+    {% endif %}
   </section>
   {% endif %}
 

@@ -86,7 +86,20 @@ CREATE TABLE IF NOT EXISTS shop_coin_log (
     created_at  TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS shop_coin_log_user ON shop_coin_log(user_id, id DESC);
+
+-- Preview images an administrator uploaded for a listing. The lowest position
+-- is the cover, used as the listing's thumbnail in place of its game icon.
+CREATE TABLE IF NOT EXISTS shop_listing_image (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    listing_id  INTEGER NOT NULL,
+    file        TEXT    NOT NULL,
+    position    INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS shop_listing_image_listing ON shop_listing_image(listing_id, position, id);
 """
+
+MAX_IMAGES = 8
 
 # Settings (the web app's setting table) and their defaults.
 DEFAULTS = {
@@ -163,10 +176,14 @@ def _insert_seed(conn: sqlite3.Connection) -> int:
 
 
 def reseed(webapp_db: Path) -> int:
-    """Throw every listing away and start again from the seed (prices back to 1)."""
+    """Throw every listing away and start again from the seed (prices back to 1).
+
+    Uploaded preview images go with them: call all_image_files() first to
+    delete their files."""
     conn = _connect(webapp_db)
     try:
         conn.execute("DELETE FROM shop_listing")
+        conn.execute("DELETE FROM shop_listing_image")
         count = _insert_seed(conn)
         conn.commit()
         return count
@@ -327,9 +344,106 @@ def delete(webapp_db: Path, listing_id: int) -> None:
     conn = _connect(webapp_db)
     try:
         conn.execute("DELETE FROM shop_listing WHERE id = ?", (listing_id,))
+        conn.execute("DELETE FROM shop_listing_image WHERE listing_id = ?", (listing_id,))
         conn.commit()
     finally:
         conn.close()
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  Pictures: uploaded preview images, and game icons as the fallback thumbnail
+# ════════════════════════════════════════════════════════════════════════════
+def images(webapp_db: Path, listing_id: int) -> list[dict]:
+    """A listing's uploaded images, cover first."""
+    conn = _connect(webapp_db)
+    try:
+        return [dict(r) for r in conn.execute(
+            "SELECT * FROM shop_listing_image WHERE listing_id = ? ORDER BY position, id",
+            (listing_id,))]
+    finally:
+        conn.close()
+
+
+def covers(webapp_db: Path, listing_ids: list[int]) -> dict[int, str]:
+    """{listing id: its cover image's file} for the listings that have one."""
+    if not listing_ids:
+        return {}
+    conn = _connect(webapp_db)
+    try:
+        marks = ", ".join("?" * len(listing_ids))
+        out: dict[int, str] = {}
+        for row in conn.execute(
+                f"SELECT listing_id, file FROM shop_listing_image WHERE listing_id IN ({marks}) "
+                f"ORDER BY listing_id, position, id", listing_ids):
+            out.setdefault(row["listing_id"], row["file"])
+        return out
+    finally:
+        conn.close()
+
+
+def add_image(webapp_db: Path, listing_id: int, file: str) -> int:
+    conn = _connect(webapp_db)
+    try:
+        position = conn.execute(
+            "SELECT COALESCE(MAX(position), -1) + 1 FROM shop_listing_image WHERE listing_id = ?",
+            (listing_id,)).fetchone()[0]
+        cur = conn.execute("INSERT INTO shop_listing_image (listing_id, file, position, created_at) "
+                           "VALUES (?, ?, ?, ?)", (listing_id, file, position, _now()))
+        conn.commit()
+        return int(cur.lastrowid)
+    finally:
+        conn.close()
+
+
+def remove_image(webapp_db: Path, listing_id: int, image_id: int) -> str:
+    """Forget an image; returns its file so the caller can delete it ('' if none)."""
+    conn = _connect(webapp_db)
+    try:
+        row = conn.execute("SELECT file FROM shop_listing_image WHERE id = ? AND listing_id = ?",
+                           (image_id, listing_id)).fetchone()
+        if not row:
+            return ""
+        conn.execute("DELETE FROM shop_listing_image WHERE id = ?", (image_id,))
+        conn.commit()
+        return row["file"]
+    finally:
+        conn.close()
+
+
+def make_cover(webapp_db: Path, listing_id: int, image_id: int) -> None:
+    conn = _connect(webapp_db)
+    try:
+        conn.execute(
+            "UPDATE shop_listing_image SET position = (SELECT COALESCE(MIN(position), 0) - 1 "
+            "FROM shop_listing_image WHERE listing_id = ?) WHERE id = ? AND listing_id = ?",
+            (listing_id, image_id, listing_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def all_image_files(webapp_db: Path, listing_id: int | None = None) -> list[str]:
+    conn = _connect(webapp_db)
+    try:
+        if listing_id is None:
+            rows = conn.execute("SELECT file FROM shop_listing_image")
+        else:
+            rows = conn.execute("SELECT file FROM shop_listing_image WHERE listing_id = ?",
+                                (listing_id,))
+        return [r["file"] for r in rows]
+    finally:
+        conn.close()
+
+
+def icon_of(listing: "Listing") -> int:
+    """The game icon that stands for a listing: its first linked item's (0 if none).
+
+    The listing must have been through ItemIndex.link_listing."""
+    for entry in listing.linked:
+        item = entry.get("item")
+        if item and item.get("icon"):
+            return int(item["icon"])
+    return 0
 
 
 def set_prices(webapp_db: Path, category: str | None, price_gil: int | None,
