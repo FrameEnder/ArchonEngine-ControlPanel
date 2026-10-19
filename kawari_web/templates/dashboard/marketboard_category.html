@@ -1,8 +1,7 @@
-{% extends "base.html" %}
+{% extends "dashboard/_layout.html" %}
 {% block title %}{{ cat.name }} · Marketboard · {{ branding.site_name }}{% endblock %}
+{% block page_title %}{{ cat.name }}{% endblock %}
 {% block content %}
-<h1>Dashboard</h1>
-{% include "dashboard/_nav.html" %}
 <p class="crumbs small"><a href="{{ url_for('dashboard.marketboard') }}">Marketboard</a> › {{ M.TABS[cat.tab] }} › {{ cat.name }}</p>
 
 <section class="card">

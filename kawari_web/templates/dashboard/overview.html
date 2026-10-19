@@ -1,8 +1,6 @@
-{% extends "base.html" %}
+{% extends "dashboard/_layout.html" %}
 {% block title %}Dashboard · {{ branding.site_name }}{% endblock %}
 {% block content %}
-<h1>Dashboard</h1>
-{% include "dashboard/_nav.html" %}
 
 {% if db_mismatch %}
 <div class="card warn">
@@ -89,7 +87,7 @@
     </dl>
   </section>
 
-  <section class="card">
+  <section class="card" id="announce">
     <h2>Announce something</h2>
     <p class="dim">Sends a notification to every account. Anyone who has turned
        announcements off in their settings will not receive it.</p>

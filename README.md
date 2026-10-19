@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.18.1.
+FFXIV server, built to run in a rootless Podman container. Version 2.19.0.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -194,9 +194,16 @@ there is no scheduler.
 Security changes the password for this site **and** the game launcher, because
 there is only one account; it verifies the current password first.
 
-**Top bar** — brand and navigation on the left, bell and account menu on the
-right. Signed out it shows Sign in and Register instead. The menus are `<details>`
-elements, so none of it needs JavaScript.
+**Top bar** — brand and navigation (Home, Community, Shop, How to connect) on the
+left, bell and account menu on the right. Signed out it shows Sign in and Register
+instead. The menus are `<details>` elements, so none of it needs JavaScript. On a
+phone the brand and account stay on one row and the navigation scrolls under them.
+
+**Look** — a dark slate theme (with the light theme still available in Branding),
+headings in Sora, text in IBM Plex Sans and IDs, ports and logs in IBM Plex Mono. The
+fonts are bundled in `kawari_web/static/fonts` (SIL Open Font License, licence files
+alongside), so nothing is fetched from outside and the site still works offline in
+its container. Icons are inline SVG.
 
 **Profile** — banner, avatar, bio, and two tabs: **Posts** (the default) and
 **Characters**, each with a count. A character is drawn as a tile board: identity,
@@ -217,6 +224,14 @@ migration, backups, account creation and admin promotion, Auracite import and
 export, branding, quest progress, marketboard prices, and container logs. Non-admins get a 403 on every dashboard
 route, including the POST actions, not just a hidden nav link.
 
+It has its own layout: a sidebar grouped by job — **Server** (Overview, Logs,
+Diagnostics), **Build & config** (Setup, Updates & branches, Server config), **Game
+data** (Database & accounts, Marketboard), **Content** (Quest lab, Quest progress,
+Duties & zones) and **Community** (Shop, Announcements, Branding) — and a header with
+the page's group and title. Shop management and listing editing live in the dashboard
+too. On a phone the sidebar folds behind a **Menu** button, which is a checkbox, so it
+needs no JavaScript.
+
 **Storage limits** (Dashboard → Database) — every update and build switch backs up both
 databases and snapshots every character, and every edit, sync and import snapshots that
 character, so without a limit they fill the disk a little more with each update. Kawari
@@ -228,7 +243,9 @@ removed at the end of every install. Backups and a character's snapshots can als
 ticked and deleted together.
 
 **Branding** — server name, tagline, emoji favicon, logo, accent colour, light or
-dark theme, footer text, and the Home page links.
+dark theme, footer text, and the Home page links. The default accent is `#5aa9f0`; an
+accent already saved is kept. Text on accent-coloured buttons is picked automatically
+(dark or white, whichever reads better), so any accent stays legible.
 
 ## Quest Lab
 
@@ -642,7 +659,7 @@ kawari_core/     shared, Qt-free: dbtools, chardata, auracite, schemagen,
                  gamedata, constants, core
 kawari_web/      Flask app: config, webdb, auth, podman_api, stats, app,
                  dashboard, upstreamcfg, srcbuild, questlab, progress, shop,
-                 marketboard, templates/, static/
+                 marketboard, templates/, static/ (style.css, app.js, fonts/)
 Containerfile    rootless-friendly image, runs as a non-root user
 run.sh           build + run with the right mounts
 kawari-web.container  systemd quadlet unit

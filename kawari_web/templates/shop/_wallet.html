@@ -14,7 +14,7 @@
       </label>
       <noscript><button class="btn small">Choose</button></noscript>
     </form>
-    <div class="wallet-figure">
+    <div class="wallet-figure gil">
       <span class="dim small">Gil</span>
       <b>{{ '{:,}'.format(gil) if gil is not none else '—' }}</b>
       {% if online %}<span class="pill small warn-pill" title="Gil can only be spent while this character is logged out">logged in</span>{% endif %}
@@ -22,7 +22,7 @@
     {% else %}
     <p class="dim">You have no characters yet. Make one in the game to have purchases delivered.</p>
     {% endif %}
-    <div class="wallet-figure">
+    <div class="wallet-figure coins">
       <span class="dim small">{{ coin_name }}</span>
       <b>{{ '{:,}'.format(wallet.balance) if wallet else 0 }}</b>
       <span class="dim small">+{{ cfg.shop_coins_per_hour }} per hour played</span>

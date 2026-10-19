@@ -1,0 +1,37 @@
+{# Inline stroke icons, so nothing is fetched from outside the container.
+   Use: {% from "_icons.html" import icon %} ... {{ icon('bell') }} #}
+{% macro icon(name, cls='icon') -%}
+<svg class="{{ cls }}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+{%- if name == 'bell' -%}<path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9"/><path d="M10 20a2 2 0 0 0 4 0"/>
+{%- elif name == 'overview' -%}<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>
+{%- elif name == 'logs' -%}<path d="M4 6h16M4 12h10M4 18h13"/>
+{%- elif name == 'pulse' -%}<path d="M3 12h4l3-7 4 14 3-7h4"/>
+{%- elif name == 'setup' -%}<path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="4"/>
+{%- elif name == 'branch' -%}<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="9" r="2.5"/><path d="M6 8.5v7M18 11.5c0 4-6 3-11 5"/>
+{%- elif name == 'sliders' -%}<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>
+{%- elif name == 'database' -%}<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>
+{%- elif name == 'users' -%}<circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 4.5a3.5 3.5 0 0 1 0 7M21 20c0-2.6-1.7-4.8-4-5.6"/>
+{%- elif name == 'chart' -%}<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>
+{%- elif name == 'scroll' -%}<path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h5"/>
+{%- elif name == 'progress' -%}<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 8 8h-8z"/>
+{%- elif name == 'castle' -%}<path d="M4 20V8l8-5 8 5v12z"/><path d="M9 20v-6h6v6"/>
+{%- elif name == 'bag' -%}<path d="M5 8h14l-1 12H6z"/><path d="M9 8a3 3 0 0 1 6 0"/>
+{%- elif name == 'megaphone' -%}<path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M16 9a4 4 0 0 1 0 6"/>
+{%- elif name == 'palette' -%}<circle cx="12" cy="12" r="8"/><circle cx="9" cy="10" r="1.2"/><circle cx="14" cy="8.5" r="1.2"/><circle cx="15.5" cy="13" r="1.2"/>
+{%- elif name == 'menu' -%}<path d="M4 7h16M4 12h16M4 17h16"/>
+{%- elif name == 'info' -%}<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>
+{%- elif name == 'warn' -%}<path d="M12 4 2.5 20h19z"/><path d="M12 10v4M12 17h.01"/>
+{%- elif name == 'check' -%}<path d="m5 12 4.5 4.5L19 7"/>
+{%- elif name == 'copy' -%}<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>
+{%- elif name == 'search' -%}<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+{%- elif name == 'close' -%}<path d="M6 6l12 12M18 6 6 18"/>
+{%- elif name == 'external' -%}<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>
+{%- elif name == 'download' -%}<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>
+{%- endif -%}
+</svg>
+{%- endmacro %}
+
+{# The crystal mark used when no logo image is set in Branding. #}
+{% macro brand_mark() -%}
+<svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true" focusable="false"><path d="M14 2 L24 14 L14 26 L4 14 Z" fill="none" stroke="var(--accent)" stroke-width="2"/><path d="M14 8 L19 14 L14 20 L9 14 Z" fill="var(--accent)"/></svg>
+{%- endmacro %}

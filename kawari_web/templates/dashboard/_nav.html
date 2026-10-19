@@ -1,13 +1,63 @@
-<nav class="subnav">
-  <a href="{{ url_for('dashboard.overview') }}" class="{{ 'on' if section == 'overview' }}">Overview</a>
-  <a href="{{ url_for('dashboard.setup') }}" class="{{ 'on' if section == 'setup' }}">Setup</a>
-  <a href="{{ url_for('dashboard.updates') }}" class="{{ 'on' if section == 'updates' }}">Updates</a>
-  <a href="{{ url_for('dashboard.config') }}" class="{{ 'on' if section == 'config' }}">Server config</a>
-  <a href="{{ url_for('dashboard.database') }}" class="{{ 'on' if section == 'database' }}">Database</a>
-  <a href="{{ url_for('dashboard.quests') }}" class="{{ 'on' if section == 'quests' }}">Quests</a>
-  <a href="{{ url_for('dashboard.progress') }}" class="{{ 'on' if section == 'progress' }}">Progress</a>
-  <a href="{{ url_for('dashboard.marketboard') }}" class="{{ 'on' if section == 'marketboard' }}">Marketboard</a>
-  <a href="{{ url_for('dashboard.branding') }}" class="{{ 'on' if section == 'branding' }}">Branding</a>
-  <a href="{{ url_for('dashboard.logs') }}" class="{{ 'on' if section == 'logs' }}">Logs</a>
-  <a href="{{ url_for('dashboard.diagnostics') }}" class="{{ 'on' if section == 'diagnostics' }}">Diagnostics</a>
+{#- The admin sidebar. nav_key comes from dashboard/_layout.html. On phones it
+    folds behind a Menu button (a checkbox, so it works without JavaScript). -#}
+{% from "_icons.html" import icon, brand_mark %}
+{% macro link(key, endpoint, label, icon_name, anchor='') -%}
+  {%- set on = nav_key == key -%}
+  <a class="side-link {{ 'on' if on }}" href="{{ url_for(endpoint) }}{{ anchor }}" {{ 'aria-current=page' if on }}>{{ icon(icon_name, 'icon sm') }}{{ label }}</a>
+{%- endmacro %}
+<nav class="admin-side" aria-label="Admin">
+  <input type="checkbox" id="side-toggle" class="side-toggle">
+  <div class="side-brand">
+    <a class="brand" href="{{ url_for('dashboard.overview') }}">
+      {% if branding.logo %}<img src="{{ url_for('main.static_upload', name=branding.logo) }}" alt="">
+      {% else %}{{ brand_mark() }}{% endif %}
+      <span>{{ branding.site_name }}</span>
+    </a>
+    <span class="admin-badge">ADMIN</span>
+    <label class="side-toggle-btn" for="side-toggle">{{ icon('menu', 'icon sm') }}Menu</label>
+  </div>
+
+  <div class="side-groups">
+    <div class="side-group">
+      <div class="side-label">Server</div>
+      {{ link('overview', 'dashboard.overview', 'Overview', 'overview') }}
+      {{ link('logs', 'dashboard.logs', 'Logs', 'logs') }}
+      {{ link('diagnostics', 'dashboard.diagnostics', 'Diagnostics', 'pulse') }}
+    </div>
+    <div class="side-group">
+      <div class="side-label">Build &amp; config</div>
+      {{ link('setup', 'dashboard.setup', 'Setup', 'setup') }}
+      {{ link('updates', 'dashboard.updates', 'Updates & branches', 'branch') }}
+      {{ link('config', 'dashboard.config', 'Server config', 'sliders') }}
+    </div>
+    <div class="side-group">
+      <div class="side-label">Game data</div>
+      {{ link('database', 'dashboard.database', 'Database & accounts', 'database') }}
+      {{ link('marketboard', 'dashboard.marketboard', 'Marketboard', 'chart') }}
+    </div>
+    <div class="side-group">
+      <div class="side-label">Content</div>
+      {{ link('quests', 'dashboard.quests', 'Quest lab', 'scroll') }}
+      {{ link('progress', 'dashboard.progress', 'Quest progress', 'progress') }}
+      {{ link('content', 'dashboard.progress_content', 'Duties & zones', 'castle') }}
+    </div>
+    <div class="side-group">
+      <div class="side-label">Community</div>
+      {{ link('shop', 'shop.manage', 'Shop', 'bag') }}
+      {{ link('announce', 'dashboard.overview', 'Announcements', 'megaphone', '#announce') }}
+      {{ link('branding', 'dashboard.branding', 'Branding', 'palette') }}
+    </div>
+  </div>
+
+  <div class="side-foot">
+    {% if user and user.avatar %}
+      <img class="avatar-sm" src="{{ url_for('main.static_upload', name=user.avatar) }}" alt="">
+    {% else %}
+      <span class="avatar-sm">{{ ((user.display_name or user.username) if user else '?')[:1]|upper }}</span>
+    {% endif %}
+    <div class="who">
+      <b>{{ (user.display_name or user.username) if user else '' }}</b>
+      <a href="{{ url_for('main.home') }}">Back to site</a>
+    </div>
+  </div>
 </nav>

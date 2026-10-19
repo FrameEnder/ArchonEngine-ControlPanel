@@ -1,9 +1,6 @@
-{% extends "base.html" %}
+{% extends "dashboard/_layout.html" %}
 {% block title %}Misc Content · {{ branding.site_name }}{% endblock %}
 {% block content %}
-<h1>Dashboard</h1>
-{% include "dashboard/_nav.html" %}
-{% set progress_tab = "content" %}{% include "dashboard/_progress_tabs.html" %}
 
 {% macro meter(t, label, what="scripted, with spawns") %}
   <div class="meter">

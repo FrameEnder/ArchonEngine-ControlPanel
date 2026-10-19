@@ -88,12 +88,14 @@ def create_app(settings: Settings | None = None) -> Flask:
         if user:
             unread = webdb.unread_count(settings.webapp_db, user["user_id"])
             recent = webdb.notifications_for(settings.webapp_db, user["user_id"], 6)
+        brand = webdb.branding(settings.webapp_db)
         return {
             "csrf_token": session["csrf"],
             "app_version": __version__,
             "unread_count": unread,
             "recent_notifications": recent,
-            "branding": webdb.branding(settings.webapp_db),
+            "branding": brand,
+            "on_accent": on_accent(brand.get("accent", "")),
             "user": getattr(g, "user", None),
             "settings": settings,
         }
@@ -104,6 +106,27 @@ def create_app(settings: Settings | None = None) -> Flask:
                                message="That page does not exist."), 404
 
     return app
+
+
+def on_accent(colour: str) -> str:
+    """Text colour for things painted in the accent colour: dark on light accents,
+    white on dark ones, whichever gives more contrast (WCAG relative luminance)."""
+    value = (colour or "").strip().lstrip("#")
+    if len(value) == 3:
+        value = "".join(c * 2 for c in value)
+    try:
+        r, g_, b = (int(value[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    except (ValueError, IndexError):
+        return "#0b1220"
+
+    def lin(c: float) -> float:
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+    lum = 0.2126 * lin(r) + 0.7152 * lin(g_) + 0.0722 * lin(b)
+    dark = 0.0066                       # luminance of #0b1220
+    on_dark = (lum + 0.05) / (dark + 0.05)
+    on_white = 1.05 / (lum + 0.05)
+    return "#0b1220" if on_dark >= on_white else "#ffffff"
 
 
 def _watch_server_state(settings, podman) -> None:

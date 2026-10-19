@@ -1,10 +1,11 @@
-{% extends "base.html" %}
+{% extends "dashboard/_layout.html" %}
 {% block title %}{{ 'Edit ' ~ listing.name if listing.id else 'New listing' }} · Shop · {{ branding.site_name }}{% endblock %}
+{% block page_title %}{{ listing.name if listing.id else 'New listing' }}{% endblock %}
+{% block page_actions %}{% if listing.id %}<a class="btn" href="{{ url_for('shop.item', listing_id=listing.id) }}">View in shop</a>{% endif %}{% endblock %}
 {% block content %}
-<p class="crumbs small"><a href="{{ url_for('shop.browse') }}">Shop</a>
+<p class="crumbs small"><a href="{{ url_for('shop.manage') }}">Shop</a>
   {% if listing.category %}› <a href="{{ url_for('shop.browse', category=listing.category) }}">{{ listing.category }}</a>{% endif %}
   {% if listing.id %}› <a href="{{ url_for('shop.item', listing_id=listing.id) }}">{{ listing.name }}</a>{% endif %}</p>
-<h1>{{ 'Edit listing' if listing.id else 'New listing' }}</h1>
 
 <div class="shop-split shop-edit">
 <form method="post" class="card" action="{{ url_for('shop.edit', listing_id=listing.id) if listing.id else url_for('shop.new') }}">

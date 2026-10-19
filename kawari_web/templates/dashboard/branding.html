@@ -1,8 +1,6 @@
-{% extends "base.html" %}
+{% extends "dashboard/_layout.html" %}
 {% block title %}Branding · {{ branding.site_name }}{% endblock %}
 {% block content %}
-<h1>Dashboard</h1>
-{% include "dashboard/_nav.html" %}
 <form method="post" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
   <section class="card">

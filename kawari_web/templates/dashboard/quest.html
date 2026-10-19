@@ -1,8 +1,7 @@
-{% extends "base.html" %}
+{% extends "dashboard/_layout.html" %}
 {% block title %}{{ q.name or entry.name or quest_id }} · Quests · {{ branding.site_name }}{% endblock %}
+{% block page_title %}{{ q.name or entry.name or ("Quest " ~ quest_id) }}{% endblock %}
 {% block content %}
-<h1>Dashboard</h1>
-{% include "dashboard/_nav.html" %}
 
 <p class="small"><a href="{{ url_for('dashboard.quests') }}">← Quest Lab</a></p>
 

@@ -106,7 +106,7 @@ BRANDING_DEFAULTS = {
     "site_name": "Kawari",
     "tagline": "A private Final Fantasy XIV server",
     "favicon_emoji": "\U0001F30D",
-    "accent": "#7c6cff",
+    "accent": "#5aa9f0",
     "theme": "dark",
     "logo": "",
     "footer": "",

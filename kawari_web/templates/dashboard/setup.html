@@ -1,8 +1,6 @@
-{% extends "base.html" %}
+{% extends "dashboard/_layout.html" %}
 {% block title %}Setup · {{ branding.site_name }}{% endblock %}
 {% block content %}
-<h1>Dashboard</h1>
-{% include "dashboard/_nav.html" %}
 
 {% if busy %}<div class="card warn"><p>A background job is running. Wait for it to
   finish before starting another - they share the container and databases.</p></div>{% endif %}

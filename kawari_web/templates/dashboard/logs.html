@@ -1,8 +1,6 @@
-{% extends "base.html" %}
+{% extends "dashboard/_layout.html" %}
 {% block title %}Logs · {{ branding.site_name }}{% endblock %}
 {% block content %}
-<h1>Dashboard</h1>
-{% include "dashboard/_nav.html" %}
 <section class="card">
   <h2>Container logs</h2>
   {% if hint %}<p class="line err">{{ hint }}</p>{% endif %}

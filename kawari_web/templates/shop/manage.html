@@ -1,8 +1,10 @@
-{% extends "base.html" %}
+{% extends "dashboard/_layout.html" %}
 {% block title %}Manage the shop · {{ branding.site_name }}{% endblock %}
+{% block page_actions %}
+<a class="btn" href="{{ url_for('shop.browse') }}">View shop</a>
+<a class="btn accent" href="{{ url_for('shop.new') }}">Add a listing</a>
+{% endblock %}
 {% block content %}
-<p class="crumbs small"><a href="{{ url_for('shop.browse') }}">Shop</a></p>
-<h1>Manage the shop</h1>
 
 <div class="cols">
 <form method="post" class="card">

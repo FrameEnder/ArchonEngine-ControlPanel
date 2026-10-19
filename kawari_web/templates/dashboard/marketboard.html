@@ -1,8 +1,6 @@
-{% extends "base.html" %}
+{% extends "dashboard/_layout.html" %}
 {% block title %}Marketboard · {{ branding.site_name }}{% endblock %}
 {% block content %}
-<h1>Dashboard</h1>
-{% include "dashboard/_nav.html" %}
 
 {% macro rates_inputs(values, blank_ok, placeholders) %}
   <div class="rates">
