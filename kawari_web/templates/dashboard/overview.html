@@ -103,13 +103,25 @@
     </form>
   </section>
 
-  <section class="card">
-    <h2>Client compatibility</h2>
+  <section class="card" id="client">
+    <div class="card-head"><h2>Client compatibility</h2>
+      <form method="post" action="{{ url_for('dashboard.client_check') }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <button class="btn small">Check again</button>
+      </form></div>
+    <dl class="kv">
+      <dt>Your client</dt>
+      <dd class="mono">{{ client_versions.game or '—' }}</dd>
+      <dt>Build supports</dt>
+      <dd>{{ build_entry.patch_text if build_entry else 'unknown' }}</dd>
+    </dl>
     {% for level, message in client %}
       <p class="line {{ level }}">{{ message }}</p>
     {% endfor %}
-    <p class="dim small">Checked against the game files at
-       <code class="mono">{{ shell.game_path or 'no game path set' }}</code>.</p>
+    <p class="hint">Read from the game files at
+       <code class="mono">{{ shell.game_path or 'no game path set' }}</code>
+       {%- if client_versions.source == 'container' and client_versions.game %}, through a short-lived container
+       (this one can't see that folder); kept for ten minutes{% endif %}.</p>
   </section>
 </div>
 {% endblock %}

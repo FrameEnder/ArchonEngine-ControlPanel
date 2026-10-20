@@ -27,13 +27,14 @@ def overview():
     settings = _settings()
     podman = _podman()
     available, version = podman.available()
+    report, client_ver, build_entry = _client_report(settings)
     return render_template(
         "dashboard/overview.html", section="overview",
         stats=stats.server_stats(settings, podman),
         info=stats.connection_info(settings),
         podman_ok=available, podman_version=version,
         db_mismatch=settings.db_path_mismatch,
-        client=_client_report(settings),
+        client=report, client_versions=client_ver, build_entry=build_entry,
         shell=settings.shell)
 
 
@@ -517,9 +518,14 @@ def import_character():
     return redirect(url_for("dashboard.database"))
 
 
-def _client_report(settings) -> list:
-    """Client-vs-server version check, as on the desktop Dashboard."""
-    from kawari_core.versions import BuildStore, compare_client, read_client_versions
+def _client_report(settings, refresh: bool = False) -> tuple[list, dict, object]:
+    """Client-vs-server version check, as on the desktop Dashboard.
+
+    Returns the messages, the client's versions (with where they were read from)
+    and the active build's entry (its supported versions, as Updates shows them)."""
+    from kawari_core.versions import BuildStore, compare_client
+
+    from .clientver import client_versions
     try:
         store = BuildStore(settings.data_dir)
         entry = store.ledger.active_entry
@@ -527,7 +533,21 @@ def _client_report(settings) -> list:
         entry = None
     cfg = settings.server_config()
     enforce = bool(cfg.value("tweaks", "enforce_validity_checks", True))
-    return compare_client(entry, read_client_versions(settings.shell.game_path), enforce)
+    client = client_versions(settings, _podman(), refresh)
+    report = compare_client(entry, client, enforce)
+    if client.get("problem") and not client.get("game"):
+        # compare_client only knows "couldn't read it"; say why.
+        report = [r for r in report if "ffxivgame.ver" not in r[1]] + [("warn", client["problem"])]
+    return report, client, entry
+
+
+@dashboard.route("/client-check", methods=["POST"])
+@auth.admin_required
+def client_check():
+    """Read the client's version again now, rather than the cached one."""
+    from .clientver import forget
+    forget()
+    return redirect(url_for("dashboard.overview") + "#client")
 
 
 # ════════════════════════════════════════════════════════════════════════════

@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.20.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.20.1.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -229,7 +229,11 @@ stats are only computed when that tab is actually open. Characters are
 so absence means hidden.
 
 **Dashboard** (administrators only) — server start/stop/restart, service and
-client-version checks, the full `config.yaml` editor, database health and
+client-version checks (Overview's **Client compatibility** compares your client's
+`.ver` files with what the active build supports — the same *Supports* as Updates. In
+the container Kawari Web can't see the game folder, so it reads them through a
+short-lived container from the server's image with the install mounted read-only, and
+keeps the answer for ten minutes; **Check again** reads them now), the full `config.yaml` editor, database health and
 migration, backups, account creation and admin promotion, Auracite import and
 export, branding, quest progress, marketboard prices, and container logs. Non-admins get a 403 on every dashboard
 route, including the POST actions, not just a hidden nav link.
