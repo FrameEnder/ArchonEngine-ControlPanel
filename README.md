@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.20.1.
+FFXIV server, built to run in a rootless Podman container. Version 2.21.0.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -425,6 +425,32 @@ the server reads them whenever the board is used, so they apply at once, logged
 in or not. The items and categories come from your game install: **Read the
 item list from the game** runs `kawari-questdump items` (the fork's, from a build
 with the marketboard), which also writes `marketboard-categories.json`.
+
+## Bot glamours
+
+**Dashboard → Bot glamours** holds the outfits the fork's party bots wear over
+their gear: `glamours.txt` in the server's data folder (beside `world.db`, which
+the container sees as `/kawari/data`). The world server reads it again whenever
+it changes, so a new list applies to the next bot that joins, with no restart.
+
+* **The Kawari Glamour Collector** (a Chrome extension, in the Kawari
+  repository's `tools/glamour-collector`) collects glamours from Eorzea
+  Collection and sends the list here. In its popup, under **Kawari Web**, give
+  this site's address as your browser reaches it (on your LAN, e.g.
+  `http://192.168.1.20:8080`, or your tailnet, e.g.
+  `http://myserver.tail1234.ts.net:8080`) and your token from **Settings →
+  Character sync**; it must be an administrator's. **Connect** asks Chrome to let
+  the extension reach that address, then **Send to Kawari Web** replaces the list
+  and **Load from Kawari Web** adds the server's glamours to the extension's.
+* **The class list**: the extension's Class dropdown is filled from your game
+  install's classes and jobs. **Read the class list from the game** runs
+  `kawari-questdump classes` (the fork's), which writes `class-index.json`.
+* **Earlier lists**: each time a list is sent, the one it replaces is kept (the
+  newest 20, in the web folder's `glamour-backups/`) and can be restored.
+
+The API, for the extension (the sync token, an administrator's):
+`GET /api/glamours/ping`, `GET /api/glamours/classes`, `GET /api/glamours` (the
+list's text) and `POST /api/glamours` (`{"text": "..."}`, replaces it).
 
 ## Diagnostics
 

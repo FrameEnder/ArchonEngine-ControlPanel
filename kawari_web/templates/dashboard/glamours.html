@@ -1,0 +1,68 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Bot glamours · {{ branding.site_name }}{% endblock %}
+{% block content %}
+
+<section class="card">
+  <h2>Party bot glamours</h2>
+  <p class="dim">The outfits party bots wear over their gear, one picked for each bot's sex and class. The list is
+     <code>{{ path.name }}</code> in the server's data folder; the world server reads it again whenever it changes, so
+     a new list applies to the next bot that joins, with no restart. The Kawari Glamour Collector (the Chrome
+     extension in the Kawari repository's <code>tools/glamour-collector</code>) sends it here: in its popup, set this
+     site's address and your token (Settings → Character sync) under Kawari Web.</p>
+  {% if counts.glamours %}
+    <p><b>{{ counts.glamours }}</b> glamours: {{ counts.male }} male, {{ counts.female }} female, {{ counts.any }} for
+       either; {{ counts.classes }} for some classes only. Last changed {{ modified }}.</p>
+  {% else %}
+    <p class="line">No list yet: bots wear their own gear's looks.</p>
+  {% endif %}
+  <p class="dim small mono">{{ path }}</p>
+</section>
+
+<section class="card">
+  <h2>Class list</h2>
+  <p class="dim">The extension's Class dropdown is filled from your game install's class and job names, read once
+     (and again after a game update).</p>
+  {% if classes %}
+    {% for group in classes.groups %}
+    <p><b>{{ group.name }}</b>: {{ group.classes | join(", ") }}</p>
+    {% endfor %}
+  {% else %}
+    <p class="line err">The class list hasn't been read from the game yet.</p>
+  {% endif %}
+  <form method="post" action="{{ url_for('dashboard.glamours_read_classes') }}" class="rowactions">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <button class="btn {{ '' if classes else 'accent' }}"
+            {{ 'disabled' if busy or not (tool.ok and has_classes_cmd) }}>Read the class list from the game</button>
+  </form>
+  {% if not tool.ok %}<p class="line err">{{ tool.reason }}</p>
+  {% elif not has_classes_cmd %}<p class="line err">The active build's kawari-questdump predates the classes command:
+     build the fork again.</p>{% endif %}
+</section>
+
+{% if text %}
+<section class="card">
+  <h2>The list</h2>
+  <details>
+    <summary>Show {{ path.name }}</summary>
+    <pre class="mono small">{{ text }}</pre>
+  </details>
+</section>
+{% endif %}
+
+{% if backups %}
+<section class="card">
+  <h2>Earlier lists</h2>
+  <p class="dim">Each time a list is sent, the one it replaces is kept here (the newest 20).</p>
+  {% for b in backups %}
+  <form method="post" action="{{ url_for('dashboard.glamours_restore') }}" class="rowactions"
+        onsubmit="return confirm('Put this list back? The current one is kept as a backup.')">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="name" value="{{ b.name }}">
+    <span class="mono">{{ b.time }}</span> · {{ b.glamours }} glamours ({{ b.male }} male, {{ b.female }} female,
+    {{ b.any }} either)
+    <button class="btn">Restore</button>
+  </form>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}
