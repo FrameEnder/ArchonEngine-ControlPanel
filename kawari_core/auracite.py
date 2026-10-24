@@ -121,6 +121,8 @@ EXTENDED_SECTIONS = [
     ("Quests in progress", "active_quests", None, True),
     ("Levequests in progress", "active_leves", None, False),
     ("Completed levequests", "completed_leves", None, True),
+    ("Completed legacy quests", "completed_legacy_quests", None, True),
+    ("Map markers unlocked", "unlocked_map_markers", None, True),
     ("Daily quests", "daily_quests", None, False),
     ("Gathering log", "gathering_log", None, True),
     ("Crafting log", "crafting_log", None, False),
@@ -199,7 +201,8 @@ SECTIONS = [
             "Masked Carnivale."),
     Section("quests", "Quest progress",
             "The completed-quest bitmask; from an extended backup also the quests in "
-            "progress (sequence and variables), completed levequests and the gathering log."),
+            "progress (sequence and variables), completed levequests and legacy quests, "
+            "map markers and the gathering log."),
     Section("companion", "Chocobo companion",
             "Extended backups only: its name, rank, EXP, skill points and lines, stance, "
             "favourite feed, colour and barding."),
@@ -277,7 +280,7 @@ class Dump:
         known = {k.split(".")[0] for _l, k, _f, _i in EXTENDED_SECTIONS}
         known |= {"version", "plugin_version", "game_version", "captured_at", "content_id",
                   "saddlebag_loaded", "achievements_loaded", "achievement_points",
-                  "fishing_log_extra", "sightseeing_extra"}
+                  "fishing_log_extra", "sightseeing_extra", "errors"}
         extra = sorted(k for k in ext if k not in known)
         if extra:
             rows.append(("Other sections", ", ".join(extra), "kept for export"))
@@ -569,10 +572,16 @@ def build_changes(ch: chardata.Character, dump: Dump, sections: set) -> tuple[di
             put_mask("quest", "completed_levequests", ext["completed_leves"], "completed_leves")
         if isinstance(ext.get("gathering_log"), list):
             put_mask("quest", "gathered_gathering_items", ext["gathering_log"], "gathering_log")
+        if isinstance(ext.get("completed_legacy_quests"), list):
+            put_mask("quest", "completed_legacy", ext["completed_legacy_quests"],
+                     "completed_legacy_quests")
+        if isinstance(ext.get("unlocked_map_markers"), list):
+            put_mask("quest", "unlocked_map_markers", ext["unlocked_map_markers"],
+                     "unlocked_map_markers")
 
     if "companion" in sections and isinstance(ext.get("companion"), dict):
         comp = ext["companion"]
-        for col, key in (("name", "name"), ("rank", "rank"), ("exp", "exp"),
+        for col, key in (("name", "name"), ("rank", "rank"), ("stars", "stars"), ("exp", "exp"),
                          ("skill_points", "skill_points"), ("favorite_feed", "favorite_feed"),
                          ("color", "colour")):
             if comp.get(key) is not None:
@@ -763,14 +772,17 @@ def export_extended(ch: chardata.Character, kept: dict | None = None,
             for q in active if isinstance(q, dict)]
     if ch.has("quest", "completed_levequests"):
         ext["completed_leves"] = [int(v) for v in ch.get_json("quest", "completed_levequests", [])]
-    if ch.has("quest", "gathered_gathering_items"):
-        ext["gathering_log"] = [int(v) for v in
-                                ch.get_json("quest", "gathered_gathering_items", [])]
+    for key, col in (("gathering_log", "gathered_gathering_items"),
+                     ("completed_legacy_quests", "completed_legacy"),
+                     ("unlocked_map_markers", "unlocked_map_markers")):
+        if ch.has("quest", col):
+            ext[key] = [int(v) for v in ch.get_json("quest", col, [])]
 
     if "buddy" in ch.rows:
         comp = dict(ext.get("companion") or {})
         comp["name"] = ch.get("buddy", "name", "") or ""
-        for key, col in (("rank", "rank"), ("exp", "exp"), ("skill_points", "skill_points"),
+        for key, col in (("rank", "rank"), ("stars", "stars"), ("exp", "exp"),
+                         ("skill_points", "skill_points"),
                          ("favorite_feed", "favorite_feed"), ("colour", "color"),
                          ("stance", "active_command")):
             if ch.has("buddy", col):

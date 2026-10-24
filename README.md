@@ -463,7 +463,8 @@ Backups from the **extended Auracite plugin** (Auracite for Kawari, in the kawar
 `kawari_extended` section on top of Auracite's own. Kawari Web imports what Kawari has a place for:
 
 * **Inventory**: crystals, key items, the chocobo saddlebag, and the glamour dresser, glamour plates and armoire;
-* **Quest progress**: the quests in progress (sequence and variables), completed levequests and the gathering log;
+* **Quest progress**: the quests in progress (sequence and variables), completed levequests and legacy quests, map
+  markers and the gathering log;
 * **Chocobo companion** (its own section, also offered to Character sync): name, rank, EXP, skill points and lines,
   stance, favourite feed, colour and barding.
 
