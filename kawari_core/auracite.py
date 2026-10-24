@@ -39,7 +39,10 @@ opt-in because upstream never imports it.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
+import time
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -130,6 +133,8 @@ EXTENDED_SECTIONS = [
     ("Glamour plates", "glamour.plates", "glamour.plates_loaded", True),
     ("Armoire", "glamour.armoire", "glamour.armoire_loaded", True),
     ("Chocobo companion", "companion", None, True),
+    ("Adventurer plate and portrait", "adventurer_plate", "adventurer_plate.loaded", True),
+    ("Settings files (gear sets, hotbars, macros)", "config_files", None, False),
     ("Gear sets", "gearsets", None, False),
     ("Retainers", "retainers", None, False),
     ("Achievements", "achievements", "achievements_loaded", False),
@@ -208,7 +213,7 @@ SECTIONS = [
             "favourite feed, colour and barding."),
     Section("profile", "Grand Company, title and mentor status",
             "Active company and the three ranks, displayed title, mentor and "
-            "novice flags."),
+            "novice flags; from an extended backup also the adventurer plate and its portrait."),
     Section("position", "Position",
             "Zone, coordinates and rotation at the time of the dump.", False),
     Section("playtime", "Play time",
@@ -610,6 +615,18 @@ def build_changes(ch: chardata.Character, dump: Dump, sections: set) -> tuple[di
             if key in d:
                 put("mentor", col, int(bool(d[key])))
 
+    plate = ext.get("adventurer_plate")
+    if "profile" in sections and isinstance(plate, dict) and plate.get("loaded"):
+        # CharaCardData (188 bytes) and the portrait's BannerData (52), stored as Kawari keeps them.
+        card = _b64(plate.get("chara_card"))
+        if card is not None and len(card) == 188:
+            put("volatile", "adventurer_plate", json.dumps(list(card), separators=(",", ":")))
+            stamp = int(plate.get("timestamp") or 0)
+            put("volatile", "adventurer_plate_saved", stamp if stamp > 0 else int(time.time()))
+        banner = _b64(plate.get("banner"))
+        if banner is not None and len(banner) == 52:
+            put("volatile", "portrait", json.dumps(list(banner), separators=(",", ":")))
+
     if "position" in sections:
         if "zone_id" in d:
             put("volatile", "zone_id", int(d["zone_id"]))
@@ -631,6 +648,16 @@ def build_changes(ch: chardata.Character, dump: Dump, sections: set) -> tuple[di
         notes.append("not imported (no equivalent in Kawari, same as upstream): "
                      + ", ".join(ignored))
     return out, notes
+
+
+def _b64(text) -> bytes | None:
+    """Standard base64 to bytes; None if it isn't."""
+    if not isinstance(text, str) or not text:
+        return None
+    try:
+        return base64.b64decode(text, validate=True)
+    except (ValueError, binascii.Error):
+        return None
 
 
 def store_extended(world_db, content_id: int, dump: "Dump") -> bool:
@@ -792,6 +819,17 @@ def export_extended(ch: chardata.Character, kept: dict | None = None,
         if ch.has("buddy", "levels"):
             comp["skill_lines"] = [int(v) for v in ch.get_json("buddy", "levels", [0, 0, 0])]
         ext["companion"] = comp
+
+    if ch.has("volatile", "adventurer_plate"):
+        card = bytes(int(v) & 0xFF for v in ch.get_json("volatile", "adventurer_plate", []))
+        if any(card):
+            banner = bytes(int(v) & 0xFF for v in ch.get_json("volatile", "portrait", []))
+            ext["adventurer_plate"] = {
+                "loaded": True,
+                "chara_card": base64.b64encode(card).decode(),
+                "banner": base64.b64encode(banner).decode() if any(banner) else None,
+                "timestamp": int(ch.get("volatile", "adventurer_plate_saved", 0) or 0),
+            }
     return ext
 
 

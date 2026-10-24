@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.22.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.22.1.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -466,7 +466,12 @@ Backups from the **extended Auracite plugin** (Auracite for Kawari, in the kawar
 * **Quest progress**: the quests in progress (sequence and variables), completed levequests and legacy quests, map
   markers and the gathering log;
 * **Chocobo companion** (its own section, also offered to Character sync): name, rank, EXP, skill points and lines,
-  stance, favourite feed, colour and barding.
+  stance, favourite feed, colour and barding;
+* **Grand Company, title and mentor status**: also the adventurer plate and its portrait (2.22.1).
+
+Gear sets, hotbars, macros and the UI layout aren't on any server: the game keeps them on your PC under the
+character's content ID, which differs on Kawari. The plugin backs those files up and restores them into your Kawari
+character's folder itself (its window's *Settings files* section); Kawari Web only keeps them.
 
 Some of it only exists in the game once its window has been opened (the glamour dresser, the armoire, the saddlebag,
 achievements, a retainer's items): the plugin marks those "not loaded" when they weren't, and the import leaves what
