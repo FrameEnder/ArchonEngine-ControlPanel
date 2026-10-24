@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.21.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.22.0.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -451,6 +451,28 @@ it changes, so a new list applies to the next bot that joins, with no restart.
 The API, for the extension (the sync token, an administrator's):
 `GET /api/glamours/ping`, `GET /api/glamours/classes`, `GET /api/glamours` (the
 list's text) and `POST /api/glamours` (`{"text": "..."}`, replaces it).
+
+## Auracite backups
+
+**Dashboard → Database → Import an Auracite backup** applies a backup to an existing character (the world server's
+own importer only creates new ones); **Export** on a character's row writes one. A snapshot is taken before an import,
+and a character who is logged in on a running server is refused, since the world server would save over the import
+when they log out. **Inspect only** shows what a backup holds without importing anything.
+
+Backups from the **extended Auracite plugin** (Auracite for Kawari, in the kawari-diagnostics repository) carry a
+`kawari_extended` section on top of Auracite's own. Kawari Web imports what Kawari has a place for:
+
+* **Inventory**: crystals, key items, the chocobo saddlebag, and the glamour dresser, glamour plates and armoire;
+* **Quest progress**: the quests in progress (sequence and variables), completed levequests and the gathering log;
+* **Chocobo companion** (its own section, also offered to Character sync): name, rank, EXP, skill points and lines,
+  stance, favourite feed, colour and barding.
+
+Some of it only exists in the game once its window has been opened (the glamour dresser, the armoire, the saddlebag,
+achievements, a retainer's items): the plugin marks those "not loaded" when they weren't, and the import leaves what
+the character has alone rather than clearing it. Everything else in the section (gear sets, hotbars, macros,
+achievements, retainers, logs and records) is kept whole with the character, in `world.db`'s `auracite_extended`
+table (the fork's migration of 2026-10-24), and an export writes it back, with Kawari's current data for the parts it
+stores: a Kawari → Auracite → Kawari round trip loses nothing.
 
 ## Diagnostics
 

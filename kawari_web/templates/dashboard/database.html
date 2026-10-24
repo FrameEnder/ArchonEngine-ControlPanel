@@ -195,6 +195,7 @@
         {% endfor %}
       </fieldset>
       <p class="dim small">A snapshot is taken before anything is written.</p>
+      <button class="btn" formaction="{{ url_for('dashboard.inspect_backup') }}">Inspect only</button>
       <button class="btn accent">Import backup</button>
     </form>
   </details>

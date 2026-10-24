@@ -459,8 +459,11 @@ def export_character(content_id: int):
     import zipfile
     settings = _settings()
     try:
+        from . import __version__
         ch = chardata.load(settings.world_db, content_id)
-        data = auracite.export_character(ch)
+        data = auracite.export_character(
+            ch, kept_extended=auracite.stored_extended(settings.world_db, content_id),
+            exporter=f"Kawari Web {__version__}")
     except Exception as exc:                            # noqa: BLE001
         flash(f"Export failed: {exc}", "err")
         return redirect(url_for("dashboard.database"))
@@ -501,6 +504,10 @@ def import_character():
             flash("No character matches that backup. Create one in the desktop app, or "
                   "pick an existing character to update.", "err")
             return redirect(url_for("dashboard.database"))
+        if chardata.is_online(settings.world_db, target) and _server_running(settings):
+            flash("That character is logged in: the world server would save over the import "
+                  "when they log out. Log them out first.", "err")
+            return redirect(url_for("dashboard.database"))
         chardata.snapshot(settings.data_dir, settings.world_db, target,
                           "before-auracite-web")
         retention.tidy_snapshots(settings, target)
@@ -508,14 +515,45 @@ def import_character():
         changes, _notes = auracite.build_changes(ch, dump, chosen)
         auracite.apply_changes(ch, changes)
         chardata.save(settings.world_db, ch)
+        kept = auracite.store_extended(settings.world_db, target, dump)
         n = sum(len(c) for c in changes.values())
-        flash(f"Imported {n} column(s) into '{ch.name}'. A snapshot was taken first.",
+        flash(f"Imported {n} column(s) into '{ch.name}'. A snapshot was taken first."
+              + (" The backup's extended data was kept for export." if kept else ""),
               "ok")
     except Exception as exc:                            # noqa: BLE001
         flash(f"Import failed: {exc}", "err")
     finally:
         tmp.unlink(missing_ok=True)
     return redirect(url_for("dashboard.database"))
+
+
+def _server_running(settings) -> bool:
+    p = _podman()
+    return p.mode != "none" and p.inspect(settings.shell.container).get("running", False)
+
+
+@dashboard.route("/characters/inspect", methods=["POST"])
+@auth.admin_required
+def inspect_backup():
+    """What an Auracite backup holds, without importing anything."""
+    settings = _settings()
+    upload = request.files.get("backup")
+    if not upload or not upload.filename:
+        flash("Choose an Auracite backup first.", "err")
+        return redirect(url_for("dashboard.database"))
+    tmp = settings.web_dir / "tmp-inspect.zip"
+    upload.save(tmp)
+    try:
+        dump = auracite.Dump.load(tmp)
+    except auracite.AuraciteError as exc:
+        flash(str(exc), "err")
+        return redirect(url_for("dashboard.database"))
+    finally:
+        tmp.unlink(missing_ok=True)
+    return render_template("dashboard/auracite_inspect.html", section="database",
+                           filename=upload.filename, summary=dump.summary(),
+                           extended=dump.extended_report(),
+                           has_extended=dump.extended is not None)
 
 
 def _client_report(settings, refresh: bool = False) -> tuple[list, dict, object]:

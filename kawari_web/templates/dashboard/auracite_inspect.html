@@ -1,0 +1,32 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Auracite backup · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>{{ filename }}</h2>
+  <p class="dim">What this backup holds. Nothing has been imported.</p>
+  <table class="grid">
+    {% for label, value in summary %}
+    <tr><th>{{ label }}</th><td>{{ value }}</td></tr>
+    {% endfor %}
+  </table>
+</section>
+
+<section class="card">
+  <h2>Extended data</h2>
+  {% if has_extended %}
+  <p class="dim">From the extended Auracite plugin. "Not loaded" sections are ones the game hadn't loaded when the
+    backup was taken (open the window first); importing leaves those alone. Sections Kawari can't use yet are kept
+    with the character and come back when you export it.</p>
+  <table class="grid">
+    <tr><th>Section</th><th>In this backup</th><th>On import</th></tr>
+    {% for label, state, action in extended %}
+    <tr><td>{{ label }}</td><td>{{ state }}</td><td class="dim">{{ action }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p>This is a standard Auracite backup, without the extended plugin's data (quests in progress, crystals, the
+    saddlebag, glamour, the chocobo companion...).</p>
+  {% endif %}
+  <p><a class="btn" href="{{ url_for('dashboard.database') }}">Back</a></p>
+</section>
+{% endblock %}

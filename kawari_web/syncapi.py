@@ -40,7 +40,7 @@ MAX_PAYLOAD_BYTES = 6 * 1024 * 1024
 # client writes it rarely and it is the one field a bad payload could mangle.
 DEFAULT_SECTIONS = ["classes", "unlocks", "travel", "content", "quests", "profile",
                     "inventory", "position", "playtime"]
-ALLOWED_SECTIONS = set(DEFAULT_SECTIONS) | {"appearance"}
+ALLOWED_SECTIONS = set(DEFAULT_SECTIONS) | {"appearance", "companion"}
 
 
 def _settings():

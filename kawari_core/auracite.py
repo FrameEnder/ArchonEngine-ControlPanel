@@ -22,6 +22,15 @@ upstream importer, so the result is what Kawari would have written:
   taken on a different patch cannot produce a wrong-length value (which would
   panic the world server, since ``Bitmask::from_sql`` unwraps its parse).
 
+The extended plugin ("Auracite for Kawari", kawari-diagnostics/auracite) adds a
+``kawari_extended`` object (docs/src/fork/auracite.md in the Kawari repo). What
+Kawari has a place for is imported into its tables (crystals, key items, the
+saddlebag, the glamour dresser, plates and armoire, quests in progress, completed
+leves, the gathering log, the chocobo companion); the whole object is also kept
+in world.db's ``auracite_extended`` table, so the parts Kawari can't use yet
+(hotbars, macros, achievements, retainers...) come back on export. A section the
+client hadn't loaded (``*_loaded: false``) is left alone, never cleared.
+
 Fields upstream ignores, and so do we: ``world``, ``data_center``, ``plate``,
 ``player_commendations``, ``armory_waist`` (Kawari's equipped storage has a belt
 slot but there is no waist armoury container). ``playtime`` is offered as an
@@ -95,6 +104,60 @@ CONTENT_FIELDS = [
 
 IGNORED_FIELDS = ["world", "data_center", "plate", "player_commendations", "armory_waist"]
 
+EXTENDED_KEY = "kawari_extended"
+EXTENDED_TABLE = "auracite_extended"
+EXTENDED_VERSION = 1
+QUEST_EVENT_BASE = 65536
+GLAMOUR_PLATES = 20
+GLAMOUR_DRESSER_SLOTS = 800
+
+# What the UI reports about an extended backup: (label, key in kawari_extended,
+# its "loaded" flag or None, whether Kawari imports it or only keeps it).
+EXTENDED_SECTIONS = [
+    ("Crystals", "crystals", None, True),
+    ("Key items", "key_items", None, True),
+    ("Chocobo saddlebag", "saddlebag", "saddlebag_loaded", True),
+    ("Premium saddlebag", "premium_saddlebag", "saddlebag_loaded", False),
+    ("Quests in progress", "active_quests", None, True),
+    ("Levequests in progress", "active_leves", None, False),
+    ("Completed levequests", "completed_leves", None, True),
+    ("Daily quests", "daily_quests", None, False),
+    ("Gathering log", "gathering_log", None, True),
+    ("Crafting log", "crafting_log", None, False),
+    ("Glamour dresser", "glamour.dresser", "glamour.dresser_loaded", True),
+    ("Glamour plates", "glamour.plates", "glamour.plates_loaded", True),
+    ("Armoire", "glamour.armoire", "glamour.armoire_loaded", True),
+    ("Chocobo companion", "companion", None, True),
+    ("Gear sets", "gearsets", None, False),
+    ("Retainers", "retainers", None, False),
+    ("Achievements", "achievements", "achievements_loaded", False),
+    ("Hunting log", "hunting_log", None, False),
+    ("Relic notes", "relic_note", None, False),
+    ("Blue Mage spells", "blue_mage_spells", None, False),
+    ("PvP profile", "pvp_profile", None, False),
+    ("Tribal reputation", "beast_reputation", None, False),
+    ("Wondrous Tails", "wondrous_tails", None, False),
+    ("Triple Triad", "triple_triad", None, False),
+    ("Gold Saucer", "gold_saucer", None, False),
+    ("Duty Support levels", "duty_support_levels", None, False),
+    ("Elemental / Bozja levels", "elemental_levels", None, False),
+    ("Hotbars", "hotbars", None, False),
+    ("Macros", "macros", None, False),
+]
+
+
+def _dig(obj, dotted: str):
+    for part in dotted.split("."):
+        if not isinstance(obj, dict):
+            return None
+        obj = obj.get(part)
+    return obj
+
+
+def _loaded(obj, dotted) -> bool:
+    """A section counts unless the backup says the client hadn't loaded it."""
+    return dotted is None or _dig(obj, dotted) is not False
+
 
 def _zone_name(zone_id) -> str:
     if zone_id is None:
@@ -122,8 +185,9 @@ SECTIONS = [
     Section("classes", "Classes and jobs",
             "Every class level and EXP, current and first class, rested EXP."),
     Section("inventory", "Inventory, equipment and currency",
-            "Bags, equipped gear, all twelve armoury chests and currencies. "
-            "Crystals and key items are untouched - the dump has no data for them."),
+            "Bags, equipped gear, all twelve armoury chests and currencies; from an "
+            "extended backup also crystals, key items, the chocobo saddlebag and the "
+            "glamour dresser, plates and armoire (those the client had loaded)."),
     Section("unlocks", "Unlocks and collections",
             "Mounts, minions, orchestrion, titles, Triple Triad, fashion accessories, "
             "facewear, fish and spearfish logs, sightseeing, cutscenes, chocobo barding."),
@@ -133,7 +197,12 @@ SECTIONS = [
     Section("content", "Duties",
             "Unlocked and cleared dungeons, trials, raids, guildhests, PvP, "
             "Masked Carnivale."),
-    Section("quests", "Quest progress", "The completed-quest bitmask."),
+    Section("quests", "Quest progress",
+            "The completed-quest bitmask; from an extended backup also the quests in "
+            "progress (sequence and variables), completed levequests and the gathering log."),
+    Section("companion", "Chocobo companion",
+            "Extended backups only: its name, rank, EXP, skill points and lines, stance, "
+            "favourite feed, colour and barding."),
     Section("profile", "Grand Company, title and mentor status",
             "Active company and the three ranks, displayed title, mentor and "
             "novice flags."),
@@ -182,6 +251,38 @@ class Dump:
     def name(self) -> str:
         return self.data.get("name", "")
 
+    @property
+    def extended(self) -> dict | None:
+        """The extended plugin's object, if this backup has one."""
+        value = self.data.get(EXTENDED_KEY)
+        return value if isinstance(value, dict) else None
+
+    def extended_report(self) -> list[tuple[str, str, str]]:
+        """(label, state, what happens to it) for each extended section."""
+        ext = self.extended
+        if ext is None:
+            return []
+        rows = []
+        for label, key, flag, imported in EXTENDED_SECTIONS:
+            value = _dig(ext, key)
+            if value is None:
+                state = "not in this backup"
+            elif not _loaded(ext, flag):
+                state = "not loaded by the client (left as it is)"
+            elif isinstance(value, list):
+                state = f"{sum(1 for v in value if v)} entries"
+            else:
+                state = "present"
+            rows.append((label, state, "imported" if imported else "kept for export"))
+        known = {k.split(".")[0] for _l, k, _f, _i in EXTENDED_SECTIONS}
+        known |= {"version", "plugin_version", "game_version", "captured_at", "content_id",
+                  "saddlebag_loaded", "achievements_loaded", "achievement_points",
+                  "fishing_log_extra", "sightseeing_extra"}
+        extra = sorted(k for k in ext if k not in known)
+        if extra:
+            rows.append(("Other sections", ", ".join(extra), "kept for export"))
+        return rows
+
     def summary(self) -> list[tuple[str, str]]:
         d = self.data
         cls = d.get("current_class", 0)
@@ -205,6 +306,12 @@ class Dump:
             ("Zone at dump", _zone_name(d.get("zone_id"))),
             ("Play time", f"{d.get('playtime', 0):,} minutes (assumed unit)"),
         ]
+        ext = self.extended
+        if ext is not None:
+            rows.append(("Extended data",
+                         f"version {ext.get('version', '?')} from "
+                         f"{ext.get('plugin_version') or 'an unknown plugin'}"
+                         + (f", game {ext['game_version']}" if ext.get("game_version") else "")))
         if self.extra_files:
             rows.append(("Other files",
                          f"{len(self.extra_files)} image(s) - portrait art, not imported"))
@@ -290,7 +397,60 @@ class Dump:
                 name = CURRENCY_SLOTS.get(int(item.get("slot", -1)))
                 if name and name in inv["currency"]:
                     inv["currency"][name] = self._item(item)
+
+        ext = self.extended or {}
+        if isinstance(ext.get("crystals"), dict) and isinstance(inv.get("crystals"), dict):
+            # CrystalsStorage's slot order is its field order; crystals keep their ID.
+            names = list(inv["crystals"])
+            for name in names:
+                inv["crystals"][name] = dict(EMPTY_ITEM,
+                                             item_id=int(inv["crystals"][name].get("item_id", 0)))
+            for item in ext["crystals"].get("items", []):
+                slot = int(item.get("slot", -1))
+                if 0 <= slot < len(names):
+                    inv["crystals"][names[slot]] = self._item(item)
+        if isinstance(ext.get("key_items"), dict) and isinstance(inv.get("key_items"), dict):
+            self._fill_slots(inv["key_items"]["slots"], ext["key_items"])
+        if (_loaded(ext, "saddlebag_loaded") and isinstance(ext.get("saddlebag"), list)
+                and isinstance(inv.get("saddlebag"), list)):
+            for page, target in zip(ext["saddlebag"], inv["saddlebag"]):
+                if isinstance(page, dict) and isinstance(target, dict):
+                    self._fill_slots(target["slots"], page)
+        glamour = ext.get("glamour")
+        if isinstance(glamour, dict):
+            current = inv.get("glamour") if isinstance(inv.get("glamour"), dict) else {}
+            current = {"dresser": current.get("dresser", []), "plates": current.get("plates", []),
+                       "armoire": current.get("armoire", [])}
+            if _loaded(glamour, "dresser_loaded") and isinstance(glamour.get("dresser"), list):
+                current["dresser"] = [self._glamour(i) for i in glamour["dresser"]
+                                      [:GLAMOUR_DRESSER_SLOTS]]
+            if _loaded(glamour, "plates_loaded") and isinstance(glamour.get("plates"), list):
+                plates = []
+                for plate in glamour["plates"][:GLAMOUR_PLATES]:
+                    items = [self._glamour(i) for i in (plate or {}).get("items", [])[:12]]
+                    items += [self._glamour({})] * (12 - len(items))
+                    plates.append({"item_ids": [i["item_id"] for i in items],
+                                   "stain0": [i["stain0"] for i in items],
+                                   "stain1": [i["stain1"] for i in items]})
+                current["plates"] = plates
+            if _loaded(glamour, "armoire_loaded") and isinstance(glamour.get("armoire"), list):
+                current["armoire"] = [int(v) & 0xFF for v in glamour["armoire"]]
+            inv["glamour"] = current
         return inv
+
+    def _fill_slots(self, slots: list, container: dict) -> None:
+        for i in range(len(slots)):
+            slots[i] = dict(EMPTY_ITEM)
+        for item in container.get("items", []):
+            slot = int(item.get("slot", -1))
+            if 0 <= slot < len(slots):
+                slots[slot] = self._item(item)
+
+    @staticmethod
+    def _glamour(src: dict) -> dict:
+        stains = list((src or {}).get("stains") or []) + [0, 0]
+        return {"item_id": int((src or {}).get("item_id", 0)),
+                "stain0": int(stains[0]), "stain1": int(stains[1])}
 
     @staticmethod
     def _item(src: dict) -> dict:
@@ -391,6 +551,42 @@ def build_changes(ch: chardata.Character, dump: Dump, sections: set) -> tuple[di
     if "quests" in sections and "completed_quests" in d:
         put_mask("quest", "completed", d["completed_quests"], "completed_quests")
 
+    ext = dump.extended or {}
+    if "quests" in sections and ext:
+        if isinstance(ext.get("active_quests"), list):
+            active = []
+            for q in ext["active_quests"]:
+                qid = int(q.get("id", 0))
+                if qid >= QUEST_EVENT_BASE:
+                    qid -= QUEST_EVENT_BASE
+                if not 0 < qid <= 0xFFFF:
+                    continue
+                variables = ([int(v) & 0xFF for v in q.get("variables") or []] + [0] * 6)[:6]
+                active.append({"id": qid, "sequence": int(q.get("sequence", 0)) & 0xFF,
+                               "variables": variables})
+            put("quest", "active", json.dumps(active, separators=(",", ":")))
+        if isinstance(ext.get("completed_leves"), list):
+            put_mask("quest", "completed_levequests", ext["completed_leves"], "completed_leves")
+        if isinstance(ext.get("gathering_log"), list):
+            put_mask("quest", "gathered_gathering_items", ext["gathering_log"], "gathering_log")
+
+    if "companion" in sections and isinstance(ext.get("companion"), dict):
+        comp = ext["companion"]
+        for col, key in (("name", "name"), ("rank", "rank"), ("exp", "exp"),
+                         ("skill_points", "skill_points"), ("favorite_feed", "favorite_feed"),
+                         ("color", "colour")):
+            if comp.get(key) is not None:
+                put("buddy", col, str(comp[key]) if col == "name" else int(comp[key]))
+        stance = comp.get("stance")
+        if stance is not None and 3 <= int(stance) <= 7:
+            put("buddy", "active_command", int(stance))
+        if isinstance(comp.get("barding"), list):
+            barding = ([min(int(v), 255) for v in comp["barding"]] + [0, 0, 0])[:3]
+            put("buddy", "barding", json.dumps(barding, separators=(",", ":")))
+        if isinstance(comp.get("skill_lines"), list):
+            lines = ([int(v) & 0xFF for v in comp["skill_lines"]] + [0, 0, 0])[:3]
+            put("buddy", "levels", json.dumps(lines, separators=(",", ":")))
+
     if "profile" in sections:
         if "grand_company" in d:
             put("grand_company", "active_company", int(d["grand_company"]["value"]))
@@ -426,6 +622,44 @@ def build_changes(ch: chardata.Character, dump: Dump, sections: set) -> tuple[di
         notes.append("not imported (no equivalent in Kawari, same as upstream): "
                      + ", ".join(ignored))
     return out, notes
+
+
+def store_extended(world_db, content_id: int, dump: "Dump") -> bool:
+    """Keep the backup's whole kawari_extended object (if any) for this character.
+
+    Returns False when there's nothing to keep or the database has no table for it
+    (a world server older than the auracite_extended migration)."""
+    import sqlite3
+    import time
+    ext = dump.extended
+    if ext is None:
+        return False
+    conn = sqlite3.connect(str(world_db))
+    try:
+        have = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
+        if EXTENDED_TABLE not in have:
+            return False
+        conn.execute(f"INSERT OR REPLACE INTO `{EXTENDED_TABLE}` (content_id, data, imported_at) "
+                     "VALUES (?, ?, ?)",
+                     (content_id, json.dumps(ext, separators=(",", ":")), int(time.time())))
+        conn.commit()
+    finally:
+        conn.close()
+    return True
+
+
+def stored_extended(world_db, content_id: int) -> dict | None:
+    """A character's kept kawari_extended object, if one was imported."""
+    cols, rows, err = dbtools.query(
+        world_db, f"SELECT data FROM `{EXTENDED_TABLE}` WHERE content_id = ?", (content_id,))
+    if err or not rows:
+        return None
+    try:
+        value = json.loads(rows[0]["data"])
+    except (TypeError, ValueError):
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def apply_changes(ch: chardata.Character, changes: dict) -> None:
@@ -471,7 +705,86 @@ def _export_item(slot: int, item: dict) -> dict:
     }
 
 
-def export_character(ch: chardata.Character, world_name: str = "") -> dict:
+def _export_container(storage) -> dict:
+    slots = (storage or {}).get("slots", []) if isinstance(storage, dict) else []
+    return _container([_export_item(i, it) for i, it in enumerate(slots) if it.get("item_id")])
+
+
+def export_extended(ch: chardata.Character, kept: dict | None = None,
+                    exporter: str = "Kawari Web") -> dict:
+    """Build kawari_extended from Kawari's data, over what an import kept.
+
+    Sections Kawari stores are written from its tables (they may have changed in
+    game since the import); everything else comes back from the kept object."""
+    ext = json.loads(json.dumps(kept)) if isinstance(kept, dict) else {}
+    ext["version"] = EXTENDED_VERSION
+    ext["plugin_version"] = exporter
+    ext["content_id"] = int(ch.content_id)
+
+    inv = ch.get_json("inventory", "contents", {})
+    if isinstance(inv, dict):
+        crystals = inv.get("crystals")
+        if isinstance(crystals, dict):
+            ext["crystals"] = _container(
+                [_export_item(i, it) for i, it in enumerate(crystals.values())
+                 if it.get("quantity")])
+        if isinstance(inv.get("key_items"), dict):
+            ext["key_items"] = _export_container(inv["key_items"])
+        if isinstance(inv.get("saddlebag"), list):
+            ext["saddlebag"] = [_export_container(page) for page in inv["saddlebag"]]
+            ext["saddlebag_loaded"] = True
+        glamour = inv.get("glamour")
+        if isinstance(glamour, dict):
+            out = dict(ext.get("glamour") or {})
+            dresser = list(glamour.get("dresser") or [])
+            out["dresser"] = [{"item_id": int(i.get("item_id", 0)),
+                               "stains": [int(i.get("stain0", 0)), int(i.get("stain1", 0))]}
+                              for i in dresser]
+            out["dresser_loaded"] = True
+            plates = []
+            for plate in glamour.get("plates") or []:
+                ids = list(plate.get("item_ids", [0] * 12))
+                s0 = list(plate.get("stain0", [0] * 12))
+                s1 = list(plate.get("stain1", [0] * 12))
+                plates.append({"items": [{"item_id": int(ids[n]), "stains": [int(s0[n]), int(s1[n])]}
+                                         for n in range(min(12, len(ids)))]})
+            out["plates"] = plates
+            out["plates_loaded"] = True
+            out["armoire"] = [int(v) for v in glamour.get("armoire") or []]
+            out["armoire_loaded"] = True
+            ext["glamour"] = out
+
+    active = ch.get_json("quest", "active", [])
+    if isinstance(active, list):
+        ext["active_quests"] = [
+            {"id": int(q.get("id", 0)) + QUEST_EVENT_BASE, "sequence": int(q.get("sequence", 0)),
+             "flags": 0, "variables": list(q.get("variables", [0] * 6)),
+             "accepting_class_job": 0}
+            for q in active if isinstance(q, dict)]
+    if ch.has("quest", "completed_levequests"):
+        ext["completed_leves"] = [int(v) for v in ch.get_json("quest", "completed_levequests", [])]
+    if ch.has("quest", "gathered_gathering_items"):
+        ext["gathering_log"] = [int(v) for v in
+                                ch.get_json("quest", "gathered_gathering_items", [])]
+
+    if "buddy" in ch.rows:
+        comp = dict(ext.get("companion") or {})
+        comp["name"] = ch.get("buddy", "name", "") or ""
+        for key, col in (("rank", "rank"), ("exp", "exp"), ("skill_points", "skill_points"),
+                         ("favorite_feed", "favorite_feed"), ("colour", "color"),
+                         ("stance", "active_command")):
+            if ch.has("buddy", col):
+                comp[key] = int(ch.get("buddy", col, 0) or 0)
+        if ch.has("buddy", "barding"):
+            comp["barding"] = [int(v) for v in ch.get_json("buddy", "barding", [0, 0, 0])]
+        if ch.has("buddy", "levels"):
+            comp["skill_lines"] = [int(v) for v in ch.get_json("buddy", "levels", [0, 0, 0])]
+        ext["companion"] = comp
+    return ext
+
+
+def export_character(ch: chardata.Character, world_name: str = "",
+                     kept_extended: dict | None = None, exporter: str = "Kawari Web") -> dict:
     """Build an Auracite-shaped character.json from a Kawari character.
 
     Emits every key upstream's importer reads, so the result round-trips: export
@@ -566,6 +879,7 @@ def export_character(ch: chardata.Character, world_name: str = "") -> dict:
     data["position_z"] = float(pos.get("z", 0.0))
     data["rotation"] = float(ch.get("volatile", "rotation", 0.0) or 0.0)
     data["zone_id"] = int(ch.get("volatile", "zone_id", 0) or 0)
+    data[EXTENDED_KEY] = export_extended(ch, kept_extended, exporter)
     return data
 
 
