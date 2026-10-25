@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.22.1.
+FFXIV server, built to run in a rootless Podman container. Version 2.22.2.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -348,7 +348,8 @@ dungeon, guildhest and other duty, and every open-world zone, per expansion.
   (`resources/scripts/content/<short code>.lua`, what the server runs when it
   starts); **has spawns** means one of the build's drop-ins adds battle NPCs to its
   map. A duty is counted done with both, started with one. A zone is counted when
-  it has monster spawns; without them it's empty on Kawari.
+  it has monster spawns; without them it's empty on Kawari. PvP maps listed as
+  open world (Wolves' Den Pier) have no monsters and aren't counted (2.22.2).
 * It shows what the server has, not how well it plays.
 
 The quest index needs a fork build whose `kawari-questdump` writes format 2 (main

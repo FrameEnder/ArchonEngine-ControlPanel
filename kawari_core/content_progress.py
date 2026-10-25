@@ -12,6 +12,9 @@ What the ACTIVE BUILD has for each:
   level (the drop-in's ``appends`` LGB is in the territory's level folder). Quest battle layers (``QB_*``) don't count
   for the zone they borrow.
 
+PvP maps listed as open world (Wolves' Den Pier: its Bg is under ``/pvp/``) have no monsters at all, so they're left
+out of the zone list (Bob, 2026-10-25).
+
 A duty with both is counted as done, with one of them as started.
 """
 
@@ -226,8 +229,8 @@ def load(root: Path, build_dir: Path | None) -> ContentProgress:
     seen = set()
     for entry in index.get("zones") or []:
         folder = level_folder(str(entry.get("bg") or ""))
-        # Several territories can share a map (event copies); count each map once.
-        if folder in seen:
+        # Several territories can share a map (event copies); count each map once. PvP maps have no monsters.
+        if folder in seen or "/pvp/" in folder:
             continue
         seen.add(folder)
         count, dropin = spawns.get(folder, (0, ""))
