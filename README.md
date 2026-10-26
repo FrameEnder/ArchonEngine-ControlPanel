@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.22.4.
+FFXIV server, built to run in a rootless Podman container. Version 2.22.5.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -494,7 +494,8 @@ needs, and commits it as one bundle to a private GitHub repository:
 * packet captures - turn capture on here (it sets `world.packet_capture` in
   config.yaml and writes to `<data>/captures`, which survives rebuilds; needs a
   fork build from ed897d8 on). Turn it off when you're done, the files grow fast;
-* the chosen characters' saved quest state and position, read from world.db;
+* the chosen characters' saved quest state and position, read from world.db (whoever was playing in the
+  window's captures comes first in the bundle's README, marked "played in this window");
 * snapshots from the **Kawari Probe** Dalamud plugin, which reports what the
   game client itself believes (its quest list and variables, key items, zone,
   position, conditions). It posts to `POST /api/diag/snapshot` with the same

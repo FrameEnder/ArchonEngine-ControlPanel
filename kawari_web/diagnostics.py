@@ -515,6 +515,12 @@ def build_bundle(note: str, content_ids: list[int], minutes: int,
     characters = [_character_state(cid) for cid in content_ids]
     snapshots = _recent_snapshots(since)
     captures = _captures(since)
+    # Whoever was playing in the window's captures first, marked, so a bundle reads as theirs (Bob's read as the
+    # first character in the database's, 2026-10-26.)
+    played = _played_in(captures)
+    for ch in characters:
+        ch["played_in_window"] = ch.get("content_id") in played
+    characters.sort(key=lambda ch: not ch["played_in_window"])
     battles = _recent_battles(since)
     build = _build_info()
 
@@ -550,6 +556,23 @@ def build_bundle(note: str, content_ids: list[int], minutes: int,
     return folder, files
 
 
+def _played_in(captures: list) -> set:
+    """The content IDs the captures' PlayerSetup packets name (each capture is one session's.)"""
+    played = set()
+    for path in captures:
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    if '"PlayerSetup"' in line:
+                        match = re.search(r"content_id: (\d+)", line)
+                        if match:
+                            played.add(int(match.group(1)))
+                        break
+        except OSError:
+            pass
+    return played
+
+
 def _readme(meta: dict, characters: list, captures: list, snapshots: list) -> str:
     lines = [f"# Diagnostics {meta['created']}", ""]
     if meta["note"]:
@@ -572,7 +595,7 @@ def _readme(meta: dict, characters: list, captures: list, snapshots: list) -> st
     for ch in characters:
         name = (ch.get("character") or {}).get("name") or ch.get("content_id")
         volatile = ch.get("volatile") or {}
-        lines.append(f"## {name}")
+        lines.append(f"## {name}" + (" (played in this window)" if ch.get("played_in_window") else ""))
         lines.append(f"Zone {volatile.get('zone_id')}, position {volatile.get('position')}")
         lines.append("")
         summary = ch.get("quest_summary") or {}
