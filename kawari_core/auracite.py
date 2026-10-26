@@ -369,9 +369,10 @@ class Dump:
                 exps[idx] = int(entry["exp"])
         return levels, exps
 
-    def inventory(self, current: dict) -> dict:
+    def inventory(self, current: dict, notes: list | None = None) -> dict:
         """Rebuild the containers the dump covers, leaving the rest alone."""
         inv = json.loads(json.dumps(current))    # deep copy
+        notes = notes if notes is not None else []
 
         def fill_indexed(container_key: str, slots: list):
             for i in range(len(slots)):
@@ -423,7 +424,18 @@ class Dump:
                     inv["crystals"][names[slot]] = self._item(item)
         if isinstance(ext.get("key_items"), dict) and isinstance(inv.get("key_items"), dict):
             self._fill_slots(inv["key_items"]["slots"], ext["key_items"])
-        if _loaded(ext, "saddlebag_loaded") and isinstance(ext.get("saddlebag"), list):
+        saddlebag = ext.get("saddlebag")
+        if (_loaded(ext, "saddlebag_loaded") and isinstance(saddlebag, list)
+                and ext.get("saddlebag_seen_at") is None
+                and not any((page or {}).get("items") for page in saddlebag if isinstance(page, dict))
+                and any(int(slot.get("item_id", 0)) for page in (inv.get("saddlebag") or [])
+                        if isinstance(page, dict) for slot in page.get("slots", []))):
+            # Auracite (Kawari) before 1.8.1.3002 read the saddlebag whenever the client said it was
+            # loaded, which it says while holding nothing it was sent (a saddlebag not opened that
+            # session), so an empty one there can't be told from an unopened one: keep the server's.
+            notes.append("saddlebag kept - the backup's is empty and was made by a plugin that can't "
+                         "tell that from one not opened (back up again with the saddlebag opened)")
+        elif _loaded(ext, "saddlebag_loaded") and isinstance(saddlebag, list):
             # Inventories saved before the world server had a saddlebag have no
             # "saddlebag" key (the server reads them as two empty pages), so make
             # the pages here, or the backup's saddlebag would be dropped.
@@ -539,7 +551,7 @@ def build_changes(ch: chardata.Character, dump: Dump, sections: set) -> tuple[di
         current = ch.get_json("inventory", "contents", {})
         if isinstance(current, dict) and current:
             put("inventory", "contents",
-                json.dumps(dump.inventory(current), separators=(",", ":")))
+                json.dumps(dump.inventory(current, notes), separators=(",", ":")))
         else:
             notes.append("inventory skipped - the character has no inventory document")
 

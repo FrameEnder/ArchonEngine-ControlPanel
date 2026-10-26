@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.22.3.
+FFXIV server, built to run in a rootless Podman container. Version 2.22.4.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -465,7 +465,9 @@ Backups from the **extended Auracite plugin** (Auracite for Kawari, in the kawar
 
 * **Inventory**: crystals, key items, the chocobo saddlebag, and the glamour dresser, glamour plates and armoire.
   Before 2.22.3 the saddlebag was skipped for a character saved before Kawari had one, so a backup imported then
-  left it empty: import it again (logged out) to bring the saddlebag's items in;
+  left it empty: import it again (logged out) to bring the saddlebag's items in. A backup made by the plugin before
+  1.8.1.3002 with an empty saddlebag doesn't empty a full one on the server (that plugin wrote an unopened saddlebag
+  as empty); the import notes "saddlebag kept";
 * **Quest progress**: the quests in progress (sequence and variables), completed levequests and legacy quests, map
   markers and the gathering log;
 * **Chocobo companion** (its own section, also offered to Character sync): name, rank, EXP, skill points and lines,
