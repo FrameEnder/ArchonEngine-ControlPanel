@@ -113,6 +113,10 @@ EXTENDED_VERSION = 1
 QUEST_EVENT_BASE = 65536
 GLAMOUR_PLATES = 20
 GLAMOUR_DRESSER_SLOTS = 800
+# The chocobo saddlebag: two pages of 35 (containers 4000 and 4001), as the world
+# server's Inventory::saddlebag stores them.
+SADDLEBAG_SLOTS = 35
+SADDLEBAG_KINDS = ("SaddleBag1", "SaddleBag2")
 
 # What the UI reports about an extended backup: (label, key in kawari_extended,
 # its "loaded" flag or None, whether Kawari imports it or only keeps it).
@@ -419,8 +423,14 @@ class Dump:
                     inv["crystals"][names[slot]] = self._item(item)
         if isinstance(ext.get("key_items"), dict) and isinstance(inv.get("key_items"), dict):
             self._fill_slots(inv["key_items"]["slots"], ext["key_items"])
-        if (_loaded(ext, "saddlebag_loaded") and isinstance(ext.get("saddlebag"), list)
-                and isinstance(inv.get("saddlebag"), list)):
+        if _loaded(ext, "saddlebag_loaded") and isinstance(ext.get("saddlebag"), list):
+            # Inventories saved before the world server had a saddlebag have no
+            # "saddlebag" key (the server reads them as two empty pages), so make
+            # the pages here, or the backup's saddlebag would be dropped.
+            if not (isinstance(inv.get("saddlebag"), list) and len(inv["saddlebag"]) == 2):
+                inv["saddlebag"] = [
+                    {"slots": [dict(EMPTY_ITEM) for _ in range(SADDLEBAG_SLOTS)], "kind": kind}
+                    for kind in SADDLEBAG_KINDS]
             for page, target in zip(ext["saddlebag"], inv["saddlebag"]):
                 if isinstance(page, dict) and isinstance(target, dict):
                     self._fill_slots(target["slots"], page)

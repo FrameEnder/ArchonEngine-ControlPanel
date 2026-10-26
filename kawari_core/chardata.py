@@ -448,17 +448,26 @@ def _blank_inventory(doc: dict) -> dict:
             out["item_id"] = item.get("item_id", 0)
         return out
 
+    def blank_container(value):
+        return {"slots": [blank(s) for s in value["slots"]],
+                **({"kind": value["kind"]} if "kind" in value else {})}
+
     out = {}
     for key, value in doc.items():
-        if key == "pages":
-            out[key] = [{"slots": [blank(s) for s in p["slots"]]} for p in value]
-        elif key in ("currency", "crystals"):
+        if key in ("currency", "crystals"):
             out[key] = {n: blank(v, keep_id=True) for n, v in value.items()}
         elif key == "equipped":
             out[key] = {n: blank(v) for n, v in value.items()}
+        elif key == "glamour":
+            # The other character's dresser, plates and armoire stay theirs.
+            out[key] = {"dresser": [], "plates": [], "armoire": []}
         elif isinstance(value, dict) and "slots" in value:
-            out[key] = {"slots": [blank(s) for s in value["slots"]],
-                        **({"kind": value["kind"]} if "kind" in value else {})}
+            out[key] = blank_container(value)
+        elif (isinstance(value, list) and value
+              and all(isinstance(p, dict) and "slots" in p for p in value)):
+            # pages and the saddlebag: lists of containers, each keeping its kind
+            # (the world server needs it to read the inventory).
+            out[key] = [blank_container(p) for p in value]
         else:
             out[key] = value
     return out
