@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.23.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.23.1.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -328,6 +328,8 @@ test.
   script. **Download the report** (`client-check.md`) and **Download bundle**
   (the report, the client's scripts and the server's, `Global.lua`,
   `Init.lua`) to hand on. The client's scripts are Square Enix's files.
+  A `SCENE_*` constant counts as played only when the script uses it, not
+  when it only defines it (2.23.1).
 
 ## Quest progress
 

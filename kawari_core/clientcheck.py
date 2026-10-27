@@ -87,7 +87,10 @@ def check(kind: str, name: str, server_script: Path, listing: str, params: dict[
     constants = {n: _number(v) for n, v in _NUM_CONST.findall(code)}
     played = set()
     for const, value in constants.items():
-        if const.startswith("SCENE") and value == int(value) and value < 65536:
+        # A SCENE constant counts when the script uses it, not just defines it (a note about a scene, as
+        # RegYok6Tuliyollal's SCENE_00001, isn't playing it.)
+        used = len(re.findall(rf"\b{const}\b", code)) > 1
+        if const.startswith("SCENE") and used and value == int(value) and value < 65536:
             played.add(int(value))
     for arg in _PLAY_ARG.findall(code):
         if arg.isdigit():
