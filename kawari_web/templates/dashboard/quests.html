@@ -96,8 +96,23 @@
       <button class="btn" {{ 'disabled' if busy or not status.ok }}>Extract</button>
       {% if extracted %}
         <p class="dim small">Extracted:
-          {% for f in extracted %}<a class="mono" href="{{ url_for('dashboard.quest_extracted', name=f.name) }}">{{ f.name }}</a>{{ ', ' if not loop.last }}{% endfor %}</p>
+          {% for f in extracted %}<a class="mono" href="{{ url_for('dashboard.quest_extracted', name=f.name) }}">{{ f.name }}</a>{{ ', ' if not loop.last }}{% endfor %}
+          · <a href="{{ url_for('dashboard.quest_extracted_zip') }}">all of them as a zip</a></p>
       {% endif %}
+    </form>
+
+    <form method="post" action="{{ url_for('dashboard.quests_run') }}" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="command" value="search">
+      <h3>Scripts that mention</h3>
+      <label>Text, one per line <textarea name="texts" rows="4"
+        placeholder="ClsCnj003"></textarea></label>
+      <p class="hint">When a script's name isn't known (a quest battle's): every client script whose contents
+         mention it, named from its own strings. They land with the extracted files.</p>
+      <label class="inline"><input type="checkbox" name="listing"> Full instruction listings</label>
+      <button class="btn" {{ 'disabled' if busy or not status.ok or not status.has_search_cmd }}>Search</button>
+      {% if status.ok and not status.has_search_cmd %}<p class="dim small">This build's kawari-questdump predates
+        the search command — build the fork again.</p>{% endif %}
     </form>
   </div>
   <hr class="sep">

@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.23.1.
+FFXIV server, built to run in a rootless Podman container. Version 2.24.0.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -330,6 +330,14 @@ test.
   `Init.lua`) to hand on. The client's scripts are Square Enix's files.
   A `SCENE_*` constant counts as played only when the script uses it, not
   when it only defines it (2.23.1).
+* **Scripts that mention** (2.24.0, Quest Lab → Run kawari-questdump; needs
+  a build of the fork with `kawari-questdump search`). For a client script
+  whose file name isn't known, such as a quest battle's: give some text it
+  should contain (`ClsCnj003`) and every game_script file that mentions it,
+  in any folder, is copied out with the extracted files, named from its own
+  strings when they match the index's name hash (its hash otherwise), with
+  `search-results.txt` saying where each was. **All of them as a zip**
+  downloads the extracted files in one attachment.
 
 ## Quest progress
 

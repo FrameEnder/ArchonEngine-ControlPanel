@@ -35,7 +35,7 @@ from .jobs import SkipStep
 from .podman_api import container_spec
 
 TOOL = "kawari-questdump"
-COMMANDS = ("chain", "dump", "extract", "index", "scripts")
+COMMANDS = ("chain", "dump", "extract", "index", "scripts", "search")
 # Where Script Check's dumps go, under the dumps folder.
 CLIENT_SCRIPTS = "client-scripts"
 DUMP_FILES = (".json", ".luab", ".txt")
@@ -59,7 +59,8 @@ def tool_status() -> dict:
     """Can kawari-questdump run, and if not, what to do about it."""
     s = settings()
     build = _active_build()
-    out = {"ok": False, "reason": "", "build": "", "has_index_cmd": False, "has_scripts_cmd": False}
+    out = {"ok": False, "reason": "", "build": "", "has_index_cmd": False, "has_scripts_cmd": False,
+           "has_search_cmd": False}
     if build is None:
         out["reason"] = "No build is active yet. Install one from Setup."
         return out
@@ -85,6 +86,8 @@ def tool_status() -> dict:
         out["has_index_cmd"] = b"kawari-questdump index" in binary
         # Script Check's dumps (`scripts`) arrived in cf9c620.
         out["has_scripts_cmd"] = b"kawari-questdump scripts" in binary
+        # Finding scripts by what they mention (`search`) arrived with Trial by Water's battle script hunt.
+        out["has_search_cmd"] = b"kawari-questdump search" in binary
     except OSError:
         pass
     return out
@@ -172,6 +175,18 @@ def quests_run():
         args = ["extract", *paths] + (["--listing"] if listing else [])
         title = f"Extract {len(paths)} file(s)"
         steps.append(("Extract the files", _run_step(args, out_sub="extracted")))
+    elif command == "search":
+        if not status["has_search_cmd"]:
+            flash(f"The active build's {TOOL} predates the search command. Build the fork again.", "err")
+            return redirect(url_for("dashboard.quests"))
+        texts = [t.strip() for line in (request.form.get("texts") or "").splitlines()
+                 for t in line.split(",") if t.strip()]
+        if not texts:
+            flash("Give at least one thing to look for, e.g. ClsCnj003", "err")
+            return redirect(url_for("dashboard.quests"))
+        args = ["search", *texts] + (["--listing"] if listing else [])
+        title = f"Find scripts mentioning {', '.join(texts)}"
+        steps.append(("Search the game's scripts", _run_step(args, out_sub="extracted")))
     elif command == "scripts":
         if not status["has_scripts_cmd"]:
             flash(f"The active build's {TOOL} predates Script Check (its scripts command came in "
@@ -441,6 +456,23 @@ def quests_delete():
             (root / name).unlink(missing_ok=True)
     flash(f"Deleted {removed} dumped quest(s).", "ok")
     return redirect(url_for("dashboard.quests"))
+
+
+@dashboard.route("/quests/extracted.zip")
+@auth.admin_required
+def quest_extracted_zip():
+    """Every extracted (or searched-out) file in one zip, to attach as it is."""
+    folder = _root() / "extracted"
+    if not folder.is_dir():
+        abort(404)
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(folder.glob("*")):
+            if path.is_file():
+                archive.write(path, path.name)
+    buffer.seek(0)
+    return send_file(buffer, as_attachment=True, mimetype="application/zip",
+                     download_name="extracted-scripts.zip")
 
 
 @dashboard.route("/quests/extracted/<name>")
