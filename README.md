@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.22.5.
+FFXIV server, built to run in a rootless Podman container. Version 2.23.0.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -312,6 +312,22 @@ test.
   them, `Global.lua`, optionally the index, and a `MANIFEST.md` of the checks:
   the attachment for whoever writes the next quests. Dumps are Square Enix's
   files; keep them private and out of git.
+* **Script Check** (2.23.0, Quest Lab → Script Check; needs a build of the
+  fork from cf9c620 on). The same check for everything that isn't a quest:
+  **Dump and check** runs `kawari-questdump scripts custom` and `scripts
+  opening` with `--server /kawari/resources/scripts` in the same throwaway
+  container, copying out the client's script for every NPC conversation, menu
+  and shop opener (CustomTalk) and city opening the server has a script for,
+  into `<data>/quest-dumps/client-scripts/` (replaced each run). The page then
+  checks the active build's scripts against them, as the fork's `questkit
+  clientcheck` does: **Need a look** are scenes the server plays that the
+  client doesn't have, constants named as the client's with another value
+  (`MAIN_MENU_RESULT_SPECIALSHOP`), and parameter-like names the sheet row
+  doesn't have; **Worth reading** are client scenes never played and the
+  scripts' TODO and "not sure" lines; also which server scripts had no client
+  script. **Download the report** (`client-check.md`) and **Download bundle**
+  (the report, the client's scripts and the server's, `Global.lua`,
+  `Init.lua`) to hand on. The client's scripts are Square Enix's files.
 
 ## Quest progress
 

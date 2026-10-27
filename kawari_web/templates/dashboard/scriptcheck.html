@@ -1,0 +1,100 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Script Check · {{ branding.site_name }}{% endblock %}
+{% block content %}
+
+<section class="card">
+  <h2>Script Check</h2>
+  <p class="dim">Checks the scripts the server runs for NPC conversations, menus and the shops they open
+     (CustomTalk) and for the city openings against the client's own scripts for them: scenes the
+     server plays that the client doesn't have, constants with another value than the client's,
+     parameter names the game data doesn't have, client scenes never played, and the scripts'
+     TODO notes. Quests are checked on <a href="{{ url_for('dashboard.quests') }}">Quest Lab</a>.</p>
+  {% if not status.ok %}
+    <p class="line err">{{ status.reason }}</p>
+  {% elif not status.has_scripts_cmd %}
+    <p class="line err">The active build ({{ status.build }}) predates Script Check: its kawari-questdump
+       has no <span class="mono">scripts</span> command (added in cf9c620). Build the fork again.</p>
+  {% endif %}
+  <form method="post" action="{{ url_for('dashboard.quests_run') }}" class="rowactions">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="command" value="scripts">
+    <button class="btn accent" {{ 'disabled' if busy or not status.ok or not status.has_scripts_cmd }}>
+      {{ 'Dump and check again' if dumped else 'Dump and check' }}</button>
+    <span class="dim small">Copies the client's script for every one the server has (a throwaway container
+      from the active server image, as Quest Lab's dumps), then checks them here.
+      {% if dumped %}Last dumped {{ made }}.{% endif %}</span>
+  </form>
+  {% if dumped %}
+  <dl class="kv">
+    <dt>Checked</dt><dd>{{ total }} server scripts</dd>
+    <dt>Need a look</dt><dd>{% if flagged %}<span class="qstatus issues">{{ flagged | length }}</span>{% else %}none{% endif %}</dd>
+    <dt>Worth reading</dt><dd>{{ others | length }} (client scenes never played or notes)</dd>
+    <dt>No client script</dt><dd>{{ missing | length }}</dd>
+  </dl>
+  <div class="rowactions">
+    <a class="btn" href="{{ url_for('dashboard.script_check_report') }}">Download the report</a>
+    <a class="btn" href="{{ url_for('dashboard.script_check_bundle') }}">Download bundle</a>
+    <span class="dim small">The bundle has the report, the client's scripts and the server's: one attachment
+      for whoever fixes what it found. The client's scripts are Square Enix's files: keep them private and
+      out of git.</span>
+  </div>
+  {% endif %}
+</section>
+
+{% macro script_rows(list) %}
+<table class="grid">
+  <tr><th>Script</th><th>Kind</th><th>Client scenes</th><th>Server plays</th><th>Findings</th></tr>
+  {% for c in list %}
+  <tr>
+    <td class="mono">{{ c.name }}<div class="dim small mono">{{ rel(c) }}</div></td>
+    <td class="small">{{ c.kind }}</td>
+    <td class="small mono">{{ c.client_scenes | join(', ') or '—' }}</td>
+    <td class="small mono">{{ c.played | join(', ') or '—' }}</td>
+    <td class="small">
+      {% if c.unknown_scenes %}<div class="err-text">Plays scenes the client doesn't have:
+        <span class="mono">{{ c.unknown_scenes | join(', ') }}</span></div>{% endif %}
+      {% for name, server, client in c.constant_mismatches %}<div class="err-text"><span class="mono">{{ name }}</span>
+        is {{ '%g' % server }} here, {{ '%g' % client }} in the client's</div>{% endfor %}
+      {% if c.unknown_params %}<div class="err-text">Names the game data doesn't have:
+        <span class="mono">{{ c.unknown_params | join(', ') }}</span></div>{% endif %}
+      {% if c.unplayed %}<div>Client scenes never played: <span class="mono">{{ c.unplayed | join(', ') }}</span></div>{% endif %}
+      {% for note in c.notes %}<div class="dim mono">{{ note }}</div>{% endfor %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endmacro %}
+
+{% if flagged %}
+<section class="card">
+  <h2>Need a look <span class="qstatus issues">{{ flagged | length }}</span></h2>
+  <p class="dim">These disagree with the client: a scene it can't play, an answer read as the wrong
+     number, or a name that is nil in Lua.</p>
+  {{ script_rows(flagged) }}
+</section>
+{% endif %}
+
+{% if others %}
+<section class="card">
+  <h2>Worth reading</h2>
+  <p class="dim">Client scenes the server never plays (left out on purpose, or a branch missed) and the
+     scripts' own TODO and "not sure" notes.</p>
+  {{ script_rows(others) }}
+</section>
+{% endif %}
+
+{% if missing %}
+<section class="card">
+  <h2>No client script</h2>
+  <p class="dim">The server has these, but the game had no client script by that name.</p>
+  <p class="small mono">{{ missing | join(', ') }}</p>
+</section>
+{% endif %}
+
+{% if clean %}
+<section class="card">
+  <h2>Agree with the client <span class="qstatus scripted">{{ clean | length }}</span></h2>
+  <p class="small mono">{% for c in clean %}{{ c.name }}{{ ', ' if not loop.last }}{% endfor %}</p>
+</section>
+{% endif %}
+{% endblock %}

@@ -23,7 +23,7 @@ from pathlib import Path
 
 from flask import abort, flash, redirect, render_template, request, send_file, url_for
 
-from kawari_core import chardata, dbtools
+from kawari_core import chardata, clientcheck, dbtools
 from kawari_core import core as kcore
 from kawari_core import questlab as Q
 from kawari_core.versions import BuildStore
@@ -35,7 +35,9 @@ from .jobs import SkipStep
 from .podman_api import container_spec
 
 TOOL = "kawari-questdump"
-COMMANDS = ("chain", "dump", "extract", "index")
+COMMANDS = ("chain", "dump", "extract", "index", "scripts")
+# Where Script Check's dumps go, under the dumps folder.
+CLIENT_SCRIPTS = "client-scripts"
 DUMP_FILES = (".json", ".luab", ".txt")
 
 
@@ -57,7 +59,7 @@ def tool_status() -> dict:
     """Can kawari-questdump run, and if not, what to do about it."""
     s = settings()
     build = _active_build()
-    out = {"ok": False, "reason": "", "build": "", "has_index_cmd": False}
+    out = {"ok": False, "reason": "", "build": "", "has_index_cmd": False, "has_scripts_cmd": False}
     if build is None:
         out["reason"] = "No build is active yet. Install one from Setup."
         return out
@@ -79,7 +81,10 @@ def tool_status() -> dict:
     # The `index` command arrived after the tool itself; its usage text says
     # whether this binary has it, so check rather than fail mid-job.
     try:
-        out["has_index_cmd"] = b"kawari-questdump index" in (build / TOOL).read_bytes()
+        binary = (build / TOOL).read_bytes()
+        out["has_index_cmd"] = b"kawari-questdump index" in binary
+        # Script Check's dumps (`scripts`) arrived in cf9c620.
+        out["has_scripts_cmd"] = b"kawari-questdump scripts" in binary
     except OSError:
         pass
     return out
@@ -167,6 +172,22 @@ def quests_run():
         args = ["extract", *paths] + (["--listing"] if listing else [])
         title = f"Extract {len(paths)} file(s)"
         steps.append(("Extract the files", _run_step(args, out_sub="extracted")))
+    elif command == "scripts":
+        if not status["has_scripts_cmd"]:
+            flash(f"The active build's {TOOL} predates Script Check (its scripts command came in "
+                  f"cf9c620). Build the fork again.", "err")
+            return redirect(url_for("dashboard.script_check"))
+        # Only what the server has a script for; the image keeps the build's resources in /kawari.
+        shutil.rmtree(_root() / CLIENT_SCRIPTS, ignore_errors=True)
+        for kind, soft in (("custom", False), ("opening", True)):
+            args = ["scripts", kind, "--server", "/kawari/resources/scripts"]
+            steps.append((f"Dump the client's {kind} scripts", _run_step(args, out_sub=CLIENT_SCRIPTS, soft=soft)))
+        try:
+            job = runner().start("Script Check: dump the client's scripts", steps)
+        except RuntimeError as exc:
+            flash(str(exc), "err")
+            return redirect(url_for("dashboard.script_check"))
+        return redirect(url_for("dashboard.job", job_id=job.id, back="script_check"))
     else:
         title = "Build the quest index"
         refresh_index = True
@@ -431,3 +452,88 @@ def quest_extracted(name: str):
     return send_file(target, as_attachment=target.suffix == ".luab",
                      mimetype="text/plain" if target.suffix == ".txt"
                      else "application/octet-stream", download_name=name)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  Script Check: the server's NPC and opening scripts against the client's
+# ════════════════════════════════════════════════════════════════════════════
+def _script_check():
+    """(checks, missing, when the dumps were made) for the active build, or None before anything was dumped."""
+    build = _active_build()
+    dumps = _root() / CLIENT_SCRIPTS
+    if build is None or not dumps.is_dir():
+        return None
+    scripts = build / "resources" / "scripts"
+    checks, missing = clientcheck.collect(dumps, scripts)
+    indexes = [p for p in dumps.glob("*/index.json")]
+    made = max((p.stat().st_mtime for p in indexes), default=0)
+    return checks, missing, made
+
+
+@dashboard.route("/quests/script-check")
+@auth.admin_required
+def script_check():
+    found = _script_check()
+    checks, missing, made = found if found else ([], [], 0)
+    flagged = [c for c in checks if c.issues]
+    others = [c for c in checks if not c.issues and (c.notes or c.unplayed)]
+    clean = [c for c in checks if not c.issues and not c.notes and not c.unplayed]
+    build = _active_build()
+    scripts = build / "resources" / "scripts" if build else None
+    def rel(c):
+        try:
+            return str(c.server_script.relative_to(scripts))
+        except (TypeError, ValueError):
+            return str(c.server_script)
+    return render_template(
+        "dashboard/scriptcheck.html", section="quests", status=tool_status(), busy=runner().busy,
+        dumped=found is not None and bool(made), made=time.strftime("%Y-%m-%d %H:%M", time.localtime(made)) if made else "",
+        flagged=flagged, others=others, clean=clean, missing=missing, total=len(checks), rel=rel)
+
+
+@dashboard.route("/quests/script-check/report.md")
+@auth.admin_required
+def script_check_report():
+    found = _script_check()
+    if not found:
+        abort(404)
+    checks, missing, _made = found
+    build = _active_build()
+    text = clientcheck.report(checks, missing, show_all=True, scripts=build / "resources" / "scripts")
+    return send_file(io.BytesIO(text.encode()), mimetype="text/markdown", as_attachment=True,
+                     download_name=f"script-check-{time.strftime('%Y%m%d-%H%M')}.md")
+
+
+@dashboard.route("/quests/script-check/bundle")
+@auth.admin_required
+def script_check_bundle():
+    """The report, the client's scripts and the server's, in one attachment for whoever fixes what it found."""
+    found = _script_check()
+    if not found:
+        abort(404)
+    checks, missing, _made = found
+    build = _active_build()
+    scripts = build / "resources" / "scripts"
+    dumps = _root() / CLIENT_SCRIPTS
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("client-check.md", clientcheck.report(checks, missing, show_all=True, scripts=scripts))
+        zf.writestr("README.md", "# Script Check bundle\n\n"
+                    f"Made by Kawari Web on {time.strftime('%Y-%m-%d %H:%M')} from build "
+                    f"{BuildStore(settings().data_dir).ledger.active_entry.short}.\n\n"
+                    "* `client-check.md`: the report.\n"
+                    "* `client-scripts/`: kawari-questdump scripts' output (the client's scripts, their listings, "
+                    "their sheet rows, index.json): Square Enix's files, do not commit them.\n"
+                    "* `fork-scripts/`: the scripts the server runs today, under `resources/scripts/`.\n")
+        for f in sorted(dumps.rglob("*")):
+            if f.is_file():
+                zf.write(f, f"client-scripts/{f.relative_to(dumps)}")
+        for c in checks:
+            if c.server_script.is_file():
+                zf.write(c.server_script, f"fork-scripts/{c.server_script.relative_to(scripts)}")
+        for shared in ("Global.lua", "Init.lua"):
+            if (scripts / shared).is_file():
+                zf.write(scripts / shared, f"fork-scripts/{shared}")
+    buffer.seek(0)
+    return send_file(buffer, mimetype="application/zip", as_attachment=True,
+                     download_name=f"kawari-script-check-{time.strftime('%Y%m%d-%H%M')}.zip")

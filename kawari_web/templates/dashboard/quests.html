@@ -7,6 +7,9 @@
     <h2>Quest Lab</h2>
     <p class="dim">Dump quests from the game with <span class="mono">kawari-questdump</span>, check the
        fork's scripts against what the client does, and put a test character anywhere in a quest.</p>
+    <p class="dim">NPC conversations, menus and openings:
+       <a href="{{ url_for('dashboard.script_check') }}">Script Check</a> holds the server's scripts for them
+       against the client's.</p>
     {% if status.ok %}
       <p class="line ok">kawari-questdump is in the active build ({{ status.build }}).</p>
     {% else %}
