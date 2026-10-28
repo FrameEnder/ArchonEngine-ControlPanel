@@ -343,8 +343,10 @@ def _summarise_quests(row: dict) -> dict:
         for index, byte in enumerate(data):
             if not isinstance(byte, int):
                 continue
+            # Kawari's quest bitmask is the client's: quest N is bit 0x80 >> (N % 8) of byte N // 8 (the world
+            # server's QuestBitmaskTransformation). Until 2.24.1 this read 1 << bit, listing the wrong quests.
             for bit in range(8):
-                if byte & (1 << bit):
+                if byte & (0x80 >> bit):
                     completed.append(index * 8 + bit)
     return {"active": active, "completed_ids": completed}
 
