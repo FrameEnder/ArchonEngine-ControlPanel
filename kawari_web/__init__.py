@@ -1,3 +1,3 @@
 """Kawari Web — a browser front end for a self-hosted Kawari FFXIV server."""
 
-__version__ = "2.24.2"
+__version__ = "2.25.0"

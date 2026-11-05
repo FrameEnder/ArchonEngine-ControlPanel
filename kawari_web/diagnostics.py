@@ -575,6 +575,30 @@ def _played_in(captures: list) -> set:
     return played
 
 
+def _marks(captures: list) -> list[tuple[str, str, int, str]]:
+    """The `!mark` notes in the captures (the world server writes them as `note` lines starting with MARK, from fork
+    build 2026-11-05 on): (UTC time, capture file, line number, the note), in time order."""
+    marks = []
+    for path in captures:
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                for number, line in enumerate(f, start=1):
+                    if '"dir":"note"' not in line.replace(" ", ""):
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except ValueError:
+                        continue
+                    text = str(entry.get("text") or "")
+                    if not text.startswith("MARK"):
+                        continue
+                    when = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(int(entry.get("t", 0)) / 1000))
+                    marks.append((when, Path(path).name, number, text[len("MARK"):].strip()))
+        except OSError:
+            pass
+    return sorted(marks)
+
+
 def _readme(meta: dict, characters: list, captures: list, snapshots: list) -> str:
     lines = [f"# Diagnostics {meta['created']}", ""]
     if meta["note"]:
@@ -588,6 +612,11 @@ def _readme(meta: dict, characters: list, captures: list, snapshots: list) -> st
         lines.append(f"* Quest test: quest {test.get('quest')} ({test.get('name', '')}) on {test.get('character', '')},"
                      f" from {test.get('from', '')}, started {test.get('started', '')}")
     lines.append(f"* Packet captures: {len(captures)}, probe snapshots: {len(snapshots)}")
+    marks = _marks(captures)
+    if marks:
+        lines.append(f"* Marks (`!mark` in game): {len(marks)}")
+        for when, name, number, text in marks:
+            lines.append(f"  * {when} UTC, `captures/{name}.gz` line {number}: {text}")
     battles = meta["files"].get("battles") or []
     if battles:
         lines.append(f"* Retail battles from Kawari Recorder in this window (in the repository's battles/): {len(battles)}")

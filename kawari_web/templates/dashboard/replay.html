@@ -1,0 +1,826 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Battle replay · {{ branding.site_name }}{% endblock %}
+{% block content %}
+<style>
+  .rp-sides { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: 20px; }
+  .rp-side h3 { margin: 0 0 6px; font-size: 15px; }
+  .rp-side select { margin-top: 4px; }
+  .rp-side select[hidden], .rp-view[hidden] { display: none; }
+  .rp-controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-bottom: 12px; }
+  .rp-controls input[type=range] { flex: 1 1 260px; min-width: 200px; }
+  .rp-controls select, .rp-controls input[type=number] { width: auto; display: inline-block; margin: 0; min-height: 34px; padding: 4px 8px; }
+  .rp-clock { font-family: var(--font-mono); font-size: 14px; min-width: 76px; }
+  .rp-views { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: 16px; }
+  .rp-view { min-width: 0; }
+  .rp-view canvas.map { width: 100%; aspect-ratio: 1 / 1; display: block; border: 1px solid var(--border);
+                        border-radius: var(--radius-sm); background: var(--surface-alt); cursor: grab; touch-action: none; }
+  .rp-view canvas.strip { width: 100%; height: 34px; display: block; margin-top: 6px; cursor: pointer;
+                          border: 1px solid var(--border); border-radius: 6px; background: var(--surface-alt); }
+  .rp-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; margin-bottom: 6px; }
+  .rp-head b { font-size: 14px; }
+  .rp-start { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 6px 0; font-size: 13px; }
+  .rp-start input { width: 90px !important; display: inline-block; margin: 0; min-height: 30px; padding: 2px 6px; }
+  .rp-hover { min-height: 1.4em; font-size: 13px; color: var(--dim); font-family: var(--font-mono); }
+  .rp-log { height: 220px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 4px 0;
+            font-family: var(--font-mono); font-size: 12px; background: var(--surface); }
+  .rp-log div { padding: 1px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rp-log div:hover { background: var(--sel); }
+  .rp-log div.now { background: var(--info-bg); }
+  .rp-log .k-mark { color: var(--warn-text); font-weight: 600; }
+  .rp-log .k-cast { color: var(--text); }
+  .rp-log .k-hit { color: var(--dim); }
+  .rp-log .k-death { color: var(--err-text); }
+  .rp-log .k-event { color: var(--info-text); }
+  .rp-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--dim); margin-top: 8px; }
+  .rp-legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+                            margin-right: 6px; vertical-align: -1px; background: var(--c); }
+</style>
+
+<section class="card">
+  <h2>Battle replay</h2>
+  <p class="dim">A retail battle and a Kawari one on the same top-down map, on one clock: where everyone stood and
+     faced, each cast's area as the client draws it, who hit whom for how much, knockbacks, deaths, and your
+     <code>!mark</code>s. The retail side is a battle run (Kawari Recorder's, or one made from a Chronofoil capture
+     with <code>questkit chronofoil --battle N.V --out run.json.gz</code>, uploaded below); the Kawari side is one zone
+     visit of a packet capture (Diagnostics → Packet capture). Either side can be either, to compare two retail runs
+     or two tries on Kawari.</p>
+  {% if has_index %}
+    <p class="line ok">Action names and areas are read from your game install (action-index.json).</p>
+  {% else %}
+    <p class="line warn">The action list hasn't been read from the game yet: casts show as dots with their action IDs,
+       without their areas.</p>
+  {% endif %}
+  <div class="rowactions">
+    <form method="post" action="{{ url_for('dashboard.replay_read_actions') }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <button class="btn small {{ '' if has_index else 'accent' }}"
+              {{ 'disabled' if busy or not (tool.ok and has_actions_cmd) }}>{{ 'Read the action list again' if has_index else 'Read the action list from the game' }}</button>
+    </form>
+    <form method="post" action="{{ url_for('dashboard.replay_upload') }}" enctype="multipart/form-data" class="rowactions">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input type="file" name="run" accept=".gz,.json" style="width:auto;margin:0">
+      <button class="btn small">Upload a battle run</button>
+    </form>
+  </div>
+  {% if not tool.ok %}<p class="line err">{{ tool.reason }}</p>
+  {% elif not has_actions_cmd %}<p class="line err">The active build's kawari-questdump predates the actions command:
+     build the fork again.</p>{% endif %}
+
+  <div class="rp-sides" style="margin-top:14px">
+    {% for side, title, chosen in [('a', 'A (retail, say)', left), ('b', 'B (Kawari, say)', right)] %}
+    <div class="rp-side" data-side="{{ side }}" data-chosen="{{ chosen }}">
+      <h3>{{ title }}</h3>
+      <select class="rp-source">
+        <option value="">Choose…</option>
+        {% if uploads %}<optgroup label="Uploaded battle runs">
+          {% for u in uploads %}<option value="{{ u.spec }}">{{ u.file }} ({{ u.at }})</option>{% endfor %}
+        </optgroup>{% endif %}
+        {% if battles %}<optgroup label="Kawari Recorder battles">
+          {% for b in battles %}<option value="{{ b.spec }}">{{ b.label }}</option>{% endfor %}
+        </optgroup>{% endif %}
+        {% if captures %}<optgroup label="Kawari packet captures">
+          {% for c in captures %}<option value="capture:{{ c.file }}">{{ c.file }} ({{ c.at }}, {{ (c.size / 1048576) | round(1) }} MB)</option>{% endfor %}
+        </optgroup>{% endif %}
+      </select>
+      <select class="rp-visit" hidden></select>
+      <p class="rp-status dim small"></p>
+    </div>
+    {% endfor %}
+  </div>
+  {% if not (uploads or battles or captures) %}
+    <p class="line">Nothing to replay yet: upload a battle run, or turn on the packet capture and play.</p>
+  {% endif %}
+  {% if uploads %}
+  <details style="margin-top:10px">
+    <summary class="dim small">Uploaded runs</summary>
+    {% for u in uploads %}
+    <form method="post" action="{{ url_for('dashboard.replay_delete') }}" class="rowactions" style="margin:4px 0">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="name" value="{{ u.file }}">
+      <span class="mono small">{{ u.file }}</span> <span class="dim small">{{ u.at }}</span>
+      <button class="btn small danger">Remove</button>
+    </form>
+    {% endfor %}
+  </details>
+  {% endif %}
+</section>
+
+<section class="card" id="rp-viewer" hidden>
+  <div class="rp-controls">
+    <button class="btn small accent" id="rp-play">Play</button>
+    <select id="rp-speed" title="Speed">
+      <option value="0.25">¼×</option><option value="0.5">½×</option><option value="1" selected>1×</option>
+      <option value="2">2×</option><option value="4">4×</option><option value="8">8×</option>
+    </select>
+    <span class="rp-clock" id="rp-clock">0.0 s</span>
+    <input type="range" id="rp-scrub" min="0" max="100" step="0.05" value="0">
+  </div>
+  <div class="rp-controls small">
+    <label class="inline"><input type="checkbox" id="rp-areas" checked>Areas</label>
+    <label class="inline"><input type="checkbox" id="rp-hits" checked>Hits</label>
+    <label class="inline"><input type="checkbox" id="rp-trails" checked>Trails</label>
+    <label class="inline"><input type="checkbox" id="rp-labels" checked>Labels</label>
+    <label class="inline"><input type="checkbox" id="rp-same" checked>Same map when the zone is the same</label>
+    <label class="inline"><input type="checkbox" id="rp-everyone">Frame everyone (not just the fight)</label>
+    <button class="btn small" id="rp-reset">Reset view</button>
+  </div>
+  <div class="rp-views">
+    {% for side in ['a', 'b'] %}
+    <div class="rp-view" data-side="{{ side }}" hidden>
+      <div class="rp-head"><b class="rp-title"></b><span class="dim small rp-zone"></span></div>
+      <canvas class="map"></canvas>
+      <div class="rp-hover"></div>
+      <div class="rp-start">
+        <span class="dim">This side's 0 s is its</span>
+        <input type="number" step="0.1" class="rp-offset" value="0"><span class="dim">s.</span>
+        <button class="btn small rp-align" data-at="hit">First hostile hit</button>
+        <button class="btn small rp-align" data-at="cast">First cast</button>
+        <button class="btn small rp-align" data-at="zero">Start</button>
+      </div>
+      <canvas class="strip" title="Click to jump. Casts, hits, deaths, director steps and marks."></canvas>
+      <div class="rp-log"></div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="rp-legend">
+    <span style="--c: var(--accent)">you</span><span style="--c: var(--ok)">allies</span>
+    <span style="--c: var(--err)">enemies</span><span style="--c: var(--faint)">others</span>
+    <span style="--c: var(--warn)">marks (<code>!mark</code>)</span>
+  </div>
+  <p class="dim small">Drag to pan, wheel to zoom. Facing is the line from each actor; an area shows from its cast's
+     start to its end, filling as it goes; a hit is a line from its source, red for damage and green for heals, an
+     arrow for a knockback (its length the Knockback sheet's distance). The grid is 5 yalms, every fifth line 25.</p>
+</section>
+
+<script>
+(() => {
+  const DATA_URL = {{ url_for('dashboard.replay_data') | tojson }};
+  const VISITS_URL = {{ url_for('dashboard.replay_visits') | tojson }};
+  const HIT_SHOWN = 0.7, KNOCKBACK_SHOWN = 1.5, LOG_WINDOW = 12, TRAIL = 6;
+
+  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const SIDE_COLOR = { you: '--accent', ally: '--ok', enemy: '--err', other: '--faint' };
+
+  // ── state ────────────────────────────────────────────────────────────────
+  const sides = { a: null, b: null };      // {replay, offset, prepared...}
+  let clock = 0, playing = false, lastFrame = 0;
+  const view = { a: null, b: null };       // {cx, cz, scale}
+  const $ = id => document.getElementById(id);
+
+  // ── binary search helpers ────────────────────────────────────────────────
+  function lastAtOrBefore(list, t, key) {
+    let lo = 0, hi = list.length - 1, found = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (key(list[mid]) <= t) { found = mid; lo = mid + 1; } else hi = mid - 1;
+    }
+    return found;
+  }
+
+  // ── preparing a replay ───────────────────────────────────────────────────
+  function prepare(replay) {
+    const p = { replay, offset: 0, tracks: {}, hp: {}, deaths: {}, gone: {}, appear: {} };
+    for (const [id, moves] of Object.entries(replay.moves)) {
+      // Rotation carried forward where a sample has none; positions likewise.
+      let x = null, z = null, r = null;
+      const track = [];
+      for (const [t, mx, mz, mr] of moves) {
+        if (mx !== null && mx !== undefined) { x = mx; z = mz; }
+        if (mr !== null && mr !== undefined) r = mr;
+        if (x !== null) track.push([t, x, z, r]);
+      }
+      p.tracks[id] = track;
+      if (track.length) p.appear[id] = track[0][0];
+    }
+    for (const [id, list] of Object.entries(replay.hp)) p.hp[id] = list;
+    for (const [t, id] of replay.deaths) (p.deaths[id] ||= []).push(t);
+    for (const [t, id] of replay.gone) (p.gone[id] ||= []).push(t);
+    p.timeline = [];
+    for (const c of replay.casts) p.timeline.push({ t: c.t, kind: 'cast', c });
+    for (const h of replay.hits) p.timeline.push({ t: h.t, kind: 'hit', h });
+    for (const [t, id] of replay.deaths) p.timeline.push({ t, kind: 'death', id });
+    for (const [t, text] of replay.marks) p.timeline.push({ t, kind: 'mark', text });
+    for (const [t, kind, text] of replay.events) p.timeline.push({ t, kind: 'event', what: kind, text });
+    p.timeline.sort((x, y) => x.t - y.t);
+    p.bounds = bounds(p, false);
+    p.boundsAll = bounds(p, true);
+    return p;
+  }
+
+  function side(p, id) { return (p.replay.actors[id] || {}).side || 'other'; }
+
+  // The fight's extent: where everyone stood as they hit or were hit, unless everyone is asked for (then every
+  // position anyone had.)
+  function bounds(p, everyone) {
+    const points = [];
+    if (!everyone) {
+      for (const h of p.replay.hits) {
+        for (const id of [h.src, ...h.targets.map(x => x.id)]) {
+          const at = positionAt(p, String(id), h.t);
+          if (at) points.push([at.x, at.z]);
+        }
+      }
+    }
+    if (points.length < 2) {
+      for (const track of Object.values(p.tracks)) for (const [, x, z] of track) points.push([x, z]);
+    }
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const [x, z] of points) {
+      minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
+    }
+    if (!isFinite(minX)) return { minX: -20, maxX: 20, minZ: -20, maxZ: 20 };
+    const pad = 8;
+    return { minX: minX - pad, maxX: maxX + pad, minZ: minZ - pad, maxZ: maxZ + pad };
+  }
+
+  // ── where things are at a time ───────────────────────────────────────────
+  function positionAt(p, id, t) {
+    const track = p.tracks[id];
+    if (!track || !track.length) return null;
+    const k = lastAtOrBefore(track, t, m => m[0]);
+    if (k < 0) return null;
+    const [t0, x0, z0, r0] = track[k];
+    const next = track[k + 1];
+    if (next && next[0] - t0 < 1.5 && next[0] > t0) {
+      const f = (t - t0) / (next[0] - t0);
+      return { x: x0 + (next[1] - x0) * f, z: z0 + (next[2] - z0) * f, r: r0 };
+    }
+    return { x: x0, z: z0, r: r0 };
+  }
+
+  function visible(p, id, t) {
+    if (p.appear[id] === undefined || p.appear[id] > t) return false;
+    const gone = p.gone[id];
+    if (!gone) return true;
+    const k = lastAtOrBefore(gone, t, g => g);
+    if (k < 0) return true;
+    // Seen again after it was deleted (spawned anew)?
+    const track = p.tracks[id];
+    const j = lastAtOrBefore(track, t, m => m[0]);
+    return j >= 0 && track[j][0] > gone[k];
+  }
+
+  function hpAt(p, id, t) {
+    const list = p.hp[id];
+    if (!list) return null;
+    const k = lastAtOrBefore(list, t, h => h[0]);
+    return k < 0 ? list[0][1] : list[k][1];
+  }
+
+  function deadAt(p, id, t) {
+    const deaths = p.deaths[id];
+    if (deaths && deaths.some(d => d <= t)) {
+      const hp = hpAt(p, id, t);
+      const last = deaths.filter(d => d <= t).pop();
+      const list = p.hp[id] || [];
+      const revived = list.some(([ht, v]) => ht > last && ht <= t && v > 0);
+      return !revived || hp === 0;
+    }
+    return hpAt(p, id, t) === 0;
+  }
+
+  // ── labels ───────────────────────────────────────────────────────────────
+  function actorLabel(p, id) {
+    const a = p.replay.actors[id];
+    if (String(id) === String(p.replay.you)) return 'you';
+    if (!a) return `#${id}`;
+    if (a.kind === 'player') return 'player';
+    if (a.base) return `${a.base}` + (a.level ? ` L${a.level}` : '');
+    return a.kind;
+  }
+  function actionName(p, id) {
+    const a = p.replay.actions[String(id)];
+    return a && a.name ? a.name : `action ${id}`;
+  }
+
+  // ── drawing ──────────────────────────────────────────────────────────────
+  function sizeCanvas(canvas) {
+    const ratio = window.devicePixelRatio || 1;
+    const w = Math.round(canvas.clientWidth * ratio), h = Math.round(canvas.clientHeight * ratio);
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    return ratio;
+  }
+
+  function sharedMap() {
+    return $('rp-same').checked && sides.a && sides.b && sides.a.replay.territory === sides.b.replay.territory;
+  }
+
+  function baseView(key) {
+    const everyone = $('rp-everyone').checked;
+    const pick = p => everyone ? p.boundsAll : p.bounds;
+    let b;
+    if (sharedMap()) {
+      const x = pick(sides.a), y = pick(sides.b);
+      b = { minX: Math.min(x.minX, y.minX), maxX: Math.max(x.maxX, y.maxX),
+            minZ: Math.min(x.minZ, y.minZ), maxZ: Math.max(x.maxZ, y.maxZ) };
+    } else b = pick(sides[key]);
+    const span = Math.max(b.maxX - b.minX, b.maxZ - b.minZ, 10);
+    return { cx: (b.minX + b.maxX) / 2, cz: (b.minZ + b.maxZ) / 2, span };
+  }
+
+  function viewFor(key) {
+    if (sharedMap()) return view.a ||= baseView('a');
+    return view[key] ||= baseView(key);
+  }
+
+  function draw(key) {
+    const p = sides[key];
+    const box = document.querySelector(`.rp-view[data-side="${key}"]`);
+    if (!p) { box.hidden = true; return; }
+    box.hidden = false;
+    const canvas = box.querySelector('canvas.map');
+    const ratio = sizeCanvas(canvas);
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const v = viewFor(key);
+    const scale = Math.min(W, H) / v.span;
+    const sx = x => W / 2 + (x - v.cx) * scale, sz = z => H / 2 + (z - v.cz) * scale;
+    const t = clock + p.offset;
+    const colors = { text: css('--text'), dim: css('--dim'), faint: css('--faint'), grid: css('--border'),
+                     grid2: css('--border-strong'), ok: css('--ok'), err: css('--err'), warn: css('--warn'),
+                     accent: css('--accent') };
+    const colorOf = id => css(SIDE_COLOR[side(p, id)] || '--faint');
+    ctx.clearRect(0, 0, W, H);
+
+    // The grid: 5 yalms, every fifth 25.
+    ctx.lineWidth = 1;
+    const x0 = v.cx - W / 2 / scale, x1 = v.cx + W / 2 / scale, z0 = v.cz - H / 2 / scale, z1 = v.cz + H / 2 / scale;
+    const step = scale < 2 ? 25 : 5;
+    for (let gx = Math.ceil(x0 / step) * step; gx <= x1; gx += step) {
+      ctx.strokeStyle = gx % 25 === 0 ? colors.grid2 : colors.grid;
+      ctx.beginPath(); ctx.moveTo(sx(gx), 0); ctx.lineTo(sx(gx), H); ctx.stroke();
+    }
+    for (let gz = Math.ceil(z0 / step) * step; gz <= z1; gz += step) {
+      ctx.strokeStyle = gz % 25 === 0 ? colors.grid2 : colors.grid;
+      ctx.beginPath(); ctx.moveTo(0, sz(gz)); ctx.lineTo(W, sz(gz)); ctx.stroke();
+    }
+    ctx.fillStyle = colors.faint;
+    ctx.font = `${11 * ratio}px ${css('--font-mono')}`;
+    ctx.fillText(`x ${x0.toFixed(0)}..${x1.toFixed(0)}  z ${z0.toFixed(0)}..${z1.toFixed(0)}`, 6 * ratio, H - 6 * ratio);
+
+    // Areas being cast now.
+    if ($('rp-areas').checked) {
+      for (const c of p.replay.casts) {
+        if (c.t > t) break;
+        const end = c.cancelled ?? (c.t + (c.time || 0));
+        if (t > end + 0.15 || t < c.t) continue;
+        const info = p.replay.actions[String(c.action)];
+        const shape = info && info.shape;
+        const caster = positionAt(p, String(c.src), c.t);
+        const color = colorOf(String(c.src));
+        const progress = c.time > 0 ? Math.min(1, (t - c.t) / c.time) : 1;
+        let label = `${actionName(p, c.action)} ${Math.max(0, end - t).toFixed(1)}s`;
+        if (c.cancelled !== null && c.cancelled !== undefined) label += ' (cancelled)';
+        let ax = c.x, az = c.z;
+        if (shape && shape.anchor === 'caster' && caster) { ax = caster.x; az = caster.z; }
+        if (shape && shape.anchor === 'target' && c.target && c.target !== c.src) {
+          const target = positionAt(p, String(c.target), t);
+          if (target) { ax = target.x; az = target.z; }
+        }
+        if (ax === null || ax === undefined) { if (!caster) continue; ax = caster.x; az = caster.z; }
+        const facing = c.r ?? (caster ? caster.r : 0) ?? 0;
+        ctx.save();
+        ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 1.5 * ratio;
+        if (shape) {
+          drawShape(ctx, shape, sx(ax), sz(az), facing, scale, progress);
+        } else {
+          ctx.globalAlpha = 0.9;
+          ctx.beginPath(); ctx.arc(sx(ax), sz(az), 4 * ratio, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = colors.text;
+        ctx.fillText(label, sx(ax) + 6 * ratio, sz(az) - 6 * ratio);
+        ctx.restore();
+      }
+    }
+
+    // Trails.
+    if ($('rp-trails').checked) {
+      for (const [id, track] of Object.entries(p.tracks)) {
+        if (!visible(p, id, t)) continue;
+        const from = lastAtOrBefore(track, t - TRAIL, m => m[0]), to = lastAtOrBefore(track, t, m => m[0]);
+        if (to - from < 1) continue;
+        ctx.strokeStyle = colorOf(id); ctx.globalAlpha = 0.35; ctx.lineWidth = 1.5 * ratio;
+        ctx.beginPath();
+        for (let k = Math.max(0, from); k <= to; k++) {
+          const [, x, z] = track[k];
+          k === Math.max(0, from) ? ctx.moveTo(sx(x), sz(z)) : ctx.lineTo(sx(x), sz(z));
+        }
+        const now = positionAt(p, id, t);
+        if (now) ctx.lineTo(sx(now.x), sz(now.z));
+        ctx.stroke(); ctx.globalAlpha = 1;
+      }
+    }
+
+    // Hits just now, and knockbacks.
+    if ($('rp-hits').checked) {
+      const from = lastAtOrBefore(p.replay.hits, t - KNOCKBACK_SHOWN, h => h.t) + 1;
+      for (let k = from; k < p.replay.hits.length; k++) {
+        const h = p.replay.hits[k];
+        if (h.t > t) break;
+        const age = t - h.t;
+        const source = positionAt(p, String(h.src), h.t);
+        if (!source) continue;
+        // An instant area with no cast before it: drawn briefly where its source stood.
+        const info = p.replay.actions[String(h.action)];
+        if (age < HIT_SHOWN && info && info.shape && info.shape.anchor === 'caster' &&
+            !p.replay.casts.some(c => c.src === h.src && c.action === h.action && Math.abs(c.t + c.time - h.t) < 1.5)) {
+          ctx.save(); ctx.strokeStyle = colorOf(String(h.src)); ctx.fillStyle = colorOf(String(h.src));
+          ctx.globalAlpha = 1 - age / HIT_SHOWN;
+          drawShape(ctx, info.shape, sx(source.x), sz(source.z), source.r || 0, scale, 1);
+          ctx.restore();
+        }
+        for (const target of h.targets) {
+          const at = positionAt(p, String(target.id), h.t);
+          if (!at) continue;
+          if (age < HIT_SHOWN && String(target.id) !== String(h.src)) {
+            ctx.globalAlpha = 1 - age / HIT_SHOWN;
+            ctx.strokeStyle = target.heal ? colors.ok : (target.damage ? colors.err : colors.faint);
+            ctx.lineWidth = 2 * ratio;
+            ctx.beginPath(); ctx.moveTo(sx(source.x), sz(source.z)); ctx.lineTo(sx(at.x), sz(at.z)); ctx.stroke();
+            ctx.globalAlpha = 1;
+          }
+          if (age < HIT_SHOWN) {
+            ctx.fillStyle = target.heal ? colors.ok : colors.err;
+            const text = target.missed ? 'miss' : target.heal ? `+${target.heal}` : target.damage ? `-${target.damage}` : '';
+            if (text) ctx.fillText(text, sx(at.x) + 6 * ratio, sz(at.z) + (14 + age * 20) * ratio);
+          }
+          if (target.knockback) {
+            const kb = p.replay.knockbacks[String(target.knockback)];
+            const distance = kb ? kb.distance : 3;
+            let dx = at.x - source.x, dz = at.z - source.z;
+            const length = Math.hypot(dx, dz) || 1;
+            dx /= length; dz /= length;
+            arrow(ctx, sx(at.x), sz(at.z), sx(at.x + dx * distance), sz(at.z + dz * distance), colors.warn, ratio,
+                  1 - age / KNOCKBACK_SHOWN);
+          }
+        }
+      }
+    }
+
+    // The actors.
+    const labels = $('rp-labels').checked;
+    for (const id of Object.keys(p.tracks)) {
+      if (!visible(p, id, t)) continue;
+      const at = positionAt(p, id, t);
+      if (!at) continue;
+      const a = p.replay.actors[id] || {};
+      const dead = deadAt(p, id, t);
+      const radius = Math.max(4 * ratio, (a.hitbox || 0.5) * scale);
+      const color = colorOf(id);
+      ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2 * ratio;
+      ctx.globalAlpha = dead ? 0.4 : 1;
+      ctx.beginPath(); ctx.arc(sx(at.x), sz(at.z), radius, 0, Math.PI * 2);
+      dead ? ctx.stroke() : ctx.fill();
+      if (at.r !== null && at.r !== undefined) {
+        const reach = radius + 8 * ratio;
+        ctx.beginPath(); ctx.moveTo(sx(at.x), sz(at.z));
+        ctx.lineTo(sx(at.x) + Math.sin(at.r) * reach, sz(at.z) + Math.cos(at.r) * reach); ctx.stroke();
+      }
+      // HP bar.
+      const hp = hpAt(p, id, t), max = a.max_hp || 0;
+      if (hp !== null && max > 0 && !dead) {
+        const w = 22 * ratio, f = Math.max(0, Math.min(1, hp / max));
+        ctx.fillStyle = colors.grid2; ctx.fillRect(sx(at.x) - w / 2, sz(at.z) - radius - 7 * ratio, w, 3 * ratio);
+        ctx.fillStyle = color; ctx.fillRect(sx(at.x) - w / 2, sz(at.z) - radius - 7 * ratio, w * f, 3 * ratio);
+      }
+      ctx.globalAlpha = 1;
+      if (labels && side(p, id) !== 'other') {
+        ctx.fillStyle = colors.dim;
+        ctx.fillText(actorLabel(p, id) + (dead ? ' ✕' : ''), sx(at.x) + radius + 3 * ratio, sz(at.z) + 4 * ratio);
+      }
+    }
+
+    // A mark just now.
+    const mark = p.replay.marks.find(([mt]) => mt <= t && t - mt < 3);
+    if (mark) {
+      ctx.fillStyle = colors.warn;
+      ctx.fillText(`MARK ${mark[1].split(' | ')[0]}`, 6 * ratio, 16 * ratio);
+    }
+    canvas._project = { sx, sz, scale, t, ratio };
+  }
+
+  // Shapes in screen space, facing `r` (FFXIV: 0 faces +z, so forward is (sin r, cos r)).
+  function drawShape(ctx, shape, x, z, r, scale, progress) {
+    const fx = Math.sin(r), fz = Math.cos(r), rx = Math.cos(r), rz = -Math.sin(r);
+    const path = () => {
+      ctx.beginPath();
+      if (shape.shape === 'circle') {
+        ctx.arc(x, z, shape.radius * scale, 0, Math.PI * 2);
+      } else if (shape.shape === 'donut') {
+        ctx.arc(x, z, shape.radius * scale, 0, Math.PI * 2);
+        ctx.moveTo(x + shape.radius * shape.hole * scale, z);
+        ctx.arc(x, z, shape.radius * shape.hole * scale, 0, Math.PI * 2, true);
+      } else if (shape.shape === 'cone') {
+        // Canvas angles run from +x towards +z; the facing (sin r, cos r) is at atan2(cos r, sin r).
+        const middle = Math.atan2(fz, fx), half = shape.angle / 2 * Math.PI / 180;
+        ctx.moveTo(x, z);
+        ctx.arc(x, z, shape.radius * scale, middle - half, middle + half);
+        ctx.closePath();
+      } else if (shape.shape === 'line' || shape.shape === 'cross') {
+        const rect = (ax, az, bx, bz, length, back) => {
+          const w = shape.width / 2 * scale, l = length * scale, b = back * scale;
+          ctx.moveTo(x - ax * b + bx * w, z - az * b + bz * w);
+          ctx.lineTo(x + ax * l + bx * w, z + az * l + bz * w);
+          ctx.lineTo(x + ax * l - bx * w, z + az * l - bz * w);
+          ctx.lineTo(x - ax * b - bx * w, z - az * b - bz * w);
+          ctx.closePath();
+        };
+        if (shape.shape === 'line') rect(fx, fz, rx, rz, shape.length, 0);
+        else { rect(fx, fz, rx, rz, shape.length, shape.length); rect(rx, rz, fx, fz, shape.length, shape.length); }
+      }
+    };
+    ctx.globalAlpha = 0.12 + 0.28 * progress;
+    path(); ctx.fill('evenodd');
+    ctx.globalAlpha = 0.9;
+    path(); ctx.stroke();
+  }
+
+  function arrow(ctx, x0, z0, x1, z1, color, ratio, alpha) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, alpha); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2.5 * ratio;
+    ctx.beginPath(); ctx.moveTo(x0, z0); ctx.lineTo(x1, z1); ctx.stroke();
+    const angle = Math.atan2(z1 - z0, x1 - x0), head = 9 * ratio;
+    ctx.beginPath(); ctx.moveTo(x1, z1);
+    ctx.lineTo(x1 - head * Math.cos(angle - 0.45), z1 - head * Math.sin(angle - 0.45));
+    ctx.lineTo(x1 - head * Math.cos(angle + 0.45), z1 - head * Math.sin(angle + 0.45));
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  // ── the strip and the log ────────────────────────────────────────────────
+  function duration() {
+    let d = 1;
+    for (const p of Object.values(sides)) if (p) d = Math.max(d, p.replay.duration - p.offset);
+    return d;
+  }
+  function clockStart() {
+    let s = 0;
+    for (const p of Object.values(sides)) if (p) s = Math.min(s, -p.offset);
+    return s;
+  }
+
+  function drawStrip(key) {
+    const p = sides[key];
+    if (!p) return;
+    const canvas = document.querySelector(`.rp-view[data-side="${key}"] canvas.strip`);
+    const ratio = sizeCanvas(canvas);
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height, start = clockStart(), span = duration() - start;
+    const px = t => (t - p.offset - start) / span * W;
+    ctx.clearRect(0, 0, W, H);
+    const row = (kind, color, y, h) => {
+      ctx.fillStyle = color;
+      for (const e of p.timeline) if (e.kind === kind) ctx.fillRect(px(e.t), y * ratio, Math.max(1, ratio), h * ratio);
+    };
+    row('hit', css('--faint'), 4, 8);
+    row('cast', css('--text'), 13, 6);
+    row('event', css('--info-text'), 20, 5);
+    row('death', css('--err'), 4, 24);
+    row('mark', css('--warn'), 0, 34);
+    ctx.fillStyle = css('--accent');
+    ctx.fillRect((clock - start) / span * W - ratio, 0, 2 * ratio, H);
+    canvas.onclick = ev => {
+      const rect = canvas.getBoundingClientRect();
+      setClock(start + (ev.clientX - rect.left) / rect.width * span);
+    };
+  }
+
+  function describe(p, e) {
+    const who = id => actorLabel(p, String(id));
+    if (e.kind === 'cast') {
+      const c = e.c;
+      const on = c.target && c.target !== c.src ? ` on ${who(c.target)}` : '';
+      return `cast ${actionName(p, c.action)} (${(c.time || 0).toFixed(1)}s) by ${who(c.src)}${on}` +
+             (c.cancelled != null ? ' — cancelled' : '');
+    }
+    if (e.kind === 'hit') {
+      const h = e.h;
+      const parts = h.targets.map(x => who(x.id) +
+        (x.missed ? ' miss' : x.heal ? ` +${x.heal}` : x.damage ? ` -${x.damage}` : '') +
+        (x.knockback ? ` knockback ${x.knockback}` : ''));
+      return `${actionName(p, h.action)} by ${who(h.src)}: ${parts.join(', ') || 'no one'}`;
+    }
+    if (e.kind === 'death') return `${who(e.id)} died`;
+    if (e.kind === 'mark') return `MARK ${e.text}`;
+    return `${e.what} ${e.text}`;
+  }
+
+  const logState = { a: '', b: '' };
+  function drawLog(key) {
+    const p = sides[key];
+    if (!p) return;
+    const box = document.querySelector(`.rp-view[data-side="${key}"] .rp-log`);
+    const t = clock + p.offset;
+    const from = Math.max(0, lastAtOrBefore(p.timeline, t - LOG_WINDOW, e => e.t));
+    const to = lastAtOrBefore(p.timeline, t + LOG_WINDOW, e => e.t);
+    const signature = `${from}:${to}:${Math.round(t * 4)}`;
+    if (logState[key] === signature) return;
+    logState[key] = signature;
+    const rows = [];
+    for (let k = from; k <= to && k < p.timeline.length; k++) {
+      const e = p.timeline[k];
+      const now = Math.abs(e.t - t) < 0.5;
+      rows.push(`<div class="k-${e.kind}${now ? ' now' : ''}" data-t="${e.t}">${(e.t).toFixed(1).padStart(7)}  ` +
+                `${escapeHtml(describe(p, e))}</div>`);
+    }
+    box.innerHTML = rows.join('') || '<div class="dim">Nothing within 12 s.</div>';
+    const current = box.querySelector('.now') || box.children[Math.floor(box.children.length / 2)];
+    if (current) box.scrollTop = current.offsetTop - box.clientHeight / 2;
+    for (const row of box.children) row.onclick = () => setClock(Number(row.dataset.t) - p.offset);
+  }
+
+  const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // ── the clock ────────────────────────────────────────────────────────────
+  function render() {
+    for (const key of ['a', 'b']) { draw(key); drawStrip(key); drawLog(key); }
+    $('rp-clock').textContent = `${clock.toFixed(1)} s`;
+    const scrub = $('rp-scrub');
+    scrub.min = clockStart(); scrub.max = duration();
+    if (document.activeElement !== scrub) scrub.value = clock;
+  }
+  function setClock(t) {
+    clock = Math.max(clockStart(), Math.min(duration(), t));
+    render();
+  }
+  function frame(now) {
+    if (!playing) return;
+    const dt = lastFrame ? (now - lastFrame) / 1000 : 0;
+    lastFrame = now;
+    clock += dt * Number($('rp-speed').value);
+    if (clock >= duration()) { clock = duration(); playing = false; $('rp-play').textContent = 'Play'; }
+    render();
+    if (playing) requestAnimationFrame(frame);
+  }
+  $('rp-play').onclick = () => {
+    playing = !playing;
+    $('rp-play').textContent = playing ? 'Pause' : 'Play';
+    if (playing) { if (clock >= duration()) clock = clockStart(); lastFrame = 0; requestAnimationFrame(frame); }
+  };
+  $('rp-scrub').oninput = ev => setClock(Number(ev.target.value));
+  for (const id of ['rp-areas', 'rp-hits', 'rp-trails', 'rp-labels']) $(id).onchange = render;
+  for (const id of ['rp-same', 'rp-everyone']) $(id).onchange = () => { view.a = view.b = null; render(); };
+  $('rp-reset').onclick = () => { view.a = view.b = null; render(); };
+  window.addEventListener('resize', render);
+  document.addEventListener('keydown', ev => {
+    if (ev.target.closest('input, select, textarea') || $('rp-viewer').hidden) return;
+    if (ev.key === ' ') { ev.preventDefault(); $('rp-play').click(); }
+    if (ev.key === 'ArrowLeft') setClock(clock - (ev.shiftKey ? 5 : 0.5));
+    if (ev.key === 'ArrowRight') setClock(clock + (ev.shiftKey ? 5 : 0.5));
+  });
+
+  // ── panning, zooming, hovering ───────────────────────────────────────────
+  for (const box of document.querySelectorAll('.rp-view')) {
+    const key = box.dataset.side;
+    const canvas = box.querySelector('canvas.map');
+    let drag = null;
+    const current = () => viewFor(key);
+    canvas.addEventListener('pointerdown', ev => { drag = { x: ev.clientX, y: ev.clientY }; canvas.setPointerCapture(ev.pointerId); });
+    canvas.addEventListener('pointerup', () => { drag = null; });
+    canvas.addEventListener('pointermove', ev => {
+      const v = current();
+      const rect = canvas.getBoundingClientRect();
+      const perPixel = v.span / Math.min(rect.width, rect.height);
+      if (drag) {
+        v.cx -= (ev.clientX - drag.x) * perPixel; v.cz -= (ev.clientY - drag.y) * perPixel;
+        drag = { x: ev.clientX, y: ev.clientY };
+        render();
+        return;
+      }
+      hover(key, (ev.clientX - rect.left) * (canvas.width / rect.width), (ev.clientY - rect.top) * (canvas.height / rect.height));
+    });
+    canvas.addEventListener('wheel', ev => {
+      ev.preventDefault();
+      const v = current();
+      v.span = Math.max(4, Math.min(4000, v.span * (ev.deltaY > 0 ? 1.15 : 1 / 1.15)));
+      render();
+    }, { passive: false });
+    box.querySelector('.rp-offset').onchange = ev => { sides[key].offset = Number(ev.target.value) || 0; render(); };
+    for (const button of box.querySelectorAll('.rp-align')) button.onclick = () => align(key, button.dataset.at);
+  }
+
+  function hover(key, mx, my) {
+    const p = sides[key];
+    const canvas = document.querySelector(`.rp-view[data-side="${key}"] canvas.map`);
+    const out = document.querySelector(`.rp-view[data-side="${key}"] .rp-hover`);
+    const proj = canvas._project;
+    if (!p || !proj) return;
+    let best = null, bestDistance = 14 * proj.ratio;
+    for (const id of Object.keys(p.tracks)) {
+      if (!visible(p, id, proj.t)) continue;
+      const at = positionAt(p, id, proj.t);
+      if (!at) continue;
+      const d = Math.hypot(proj.sx(at.x) - mx, proj.sz(at.z) - my);
+      if (d < bestDistance) { best = { id, at }; bestDistance = d; }
+    }
+    if (!best) { out.textContent = ''; return; }
+    const a = p.replay.actors[best.id] || {};
+    const hp = hpAt(p, best.id, proj.t);
+    out.textContent = `${actorLabel(p, best.id)}: ${a.kind || '?'}` + (a.base ? ` base ${a.base}` : '') +
+      (a.layout ? ` layout ${a.layout}` : '') + (a.name_id ? ` name ${a.name_id}` : '') +
+      ` battalion ${a.battalion ?? '?'}` + (hp !== null ? ` HP ${hp}/${a.max_hp || '?'}` : '') +
+      ` at ${best.at.x.toFixed(2)}, ${best.at.z.toFixed(2)}` + (best.at.r != null ? ` facing ${best.at.r.toFixed(2)}` : '');
+  }
+
+  function align(key, at) {
+    const p = sides[key];
+    if (!p) return;
+    let t = 0;
+    if (at === 'hit') {
+      const you = p.replay.you;
+      const hit = p.replay.hits.find(h => h.targets.some(x =>
+        side(p, String(h.src)) !== side(p, String(x.id)) && side(p, String(x.id)) !== 'other' &&
+        side(p, String(h.src)) !== 'other' && (x.damage > 0 || x.missed)));
+      t = hit ? hit.t : 0;
+    } else if (at === 'cast') {
+      const cast = p.replay.casts[0];
+      t = cast ? cast.t : 0;
+    }
+    p.offset = Math.round(t * 1000) / 1000;
+    document.querySelector(`.rp-view[data-side="${key}"] .rp-offset`).value = p.offset;
+    setClock(0);
+  }
+
+  // ── loading ──────────────────────────────────────────────────────────────
+  async function load(key, spec) {
+    const panel = document.querySelector(`.rp-side[data-side="${key}"]`);
+    const status = panel.querySelector('.rp-status');
+    if (!spec) { sides[key] = null; view.a = view.b = null; status.textContent = ''; refresh(); return; }
+    status.textContent = 'Reading…';
+    try {
+      const response = await fetch(`${DATA_URL}?src=${encodeURIComponent(spec)}`);
+      const body = await response.json();
+      if (!body.ok) throw new Error(body.error || response.statusText);
+      const p = prepare(body.replay);
+      sides[key] = p;
+      view.a = view.b = null;
+      const r = body.replay;
+      status.textContent = `${Object.keys(r.actors).length} actors, ${r.casts.length} casts, ${r.hits.length} hits, ` +
+                           `${r.marks.length} marks, ${r.duration.toFixed(0)} s.`;
+      const box = document.querySelector(`.rp-view[data-side="${key}"]`);
+      box.querySelector('.rp-title').textContent = r.label;
+      box.querySelector('.rp-zone').textContent = `territory ${r.territory}` + (r.content ? `, duty ${r.content}` : '');
+      box.querySelector('.rp-offset').value = 0;
+      const params = new URLSearchParams(location.search);
+      params.set(key, spec);
+      history.replaceState(null, '', `${location.pathname}?${params}`);
+      refresh();
+    } catch (error) {
+      status.textContent = `Couldn't read it: ${error.message}`;
+    }
+  }
+
+  function refresh() {
+    $('rp-viewer').hidden = !(sides.a || sides.b);
+    logState.a = logState.b = '';
+    setClock(Math.max(clockStart(), Math.min(clock, duration())));
+  }
+
+  async function chooseCapture(key, file, visit) {
+    const panel = document.querySelector(`.rp-side[data-side="${key}"]`);
+    const visits = panel.querySelector('.rp-visit');
+    const status = panel.querySelector('.rp-status');
+    status.textContent = 'Reading the visits…';
+    const response = await fetch(`${VISITS_URL}?file=${encodeURIComponent(file)}`);
+    const body = await response.json();
+    if (!body.ok) { status.textContent = body.error; return; }
+    visits.innerHTML = '<option value="">Which visit?</option>' + body.visits.map(v =>
+      `<option value="${v.index}">${v.at} UTC · territory ${v.territory}${v.content ? ' duty ' + v.content : ''} · ` +
+      `${v.seconds} s · ${v.hits} hits${v.marks ? ' · ' + v.marks + ' marks' : ''}</option>`).join('');
+    visits.hidden = false;
+    status.textContent = 'Choose a visit (a zone, from one zone-in to the next).';
+    visits.onchange = () => visits.value !== '' && load(key, `capture:${file}:${visits.value}`);
+    if (visit !== undefined && visit !== '') { visits.value = visit; load(key, `capture:${file}:${visit}`); }
+    else {
+      // The busiest fight is the likeliest one.
+      const busiest = body.visits.slice().sort((x, y) => y.hits - x.hits)[0];
+      if (busiest && busiest.hits) { visits.value = busiest.index; load(key, `capture:${file}:${busiest.index}`); }
+    }
+  }
+
+  for (const panel of document.querySelectorAll('.rp-side')) {
+    const key = panel.dataset.side;
+    const source = panel.querySelector('.rp-source');
+    const visits = panel.querySelector('.rp-visit');
+    source.onchange = () => {
+      visits.hidden = true;
+      if (source.value.startsWith('capture:')) chooseCapture(key, source.value.slice(8));
+      else load(key, source.value);
+    };
+    const chosen = panel.dataset.chosen;
+    if (chosen) {
+      if (chosen.startsWith('capture:')) {
+        const rest = chosen.slice(8), cut = rest.lastIndexOf(':');
+        const file = cut > 0 ? rest.slice(0, cut) : rest, visit = cut > 0 ? rest.slice(cut + 1) : '';
+        source.value = `capture:${file}`;
+        chooseCapture(key, file, visit);
+      } else {
+        source.value = chosen;
+        load(key, chosen);
+      }
+    }
+  }
+})();
+</script>
+{% endblock %}

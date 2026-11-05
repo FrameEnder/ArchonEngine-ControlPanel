@@ -1,7 +1,7 @@
 # ArchonEngine ControlPanel
 
 A browser management/deployment front end for a self-hosted [ArchonEngine](https://github.com/FrameEnder/ArchonEngine)
-FFXIV server, built to run in a rootless Podman container. Version 2.24.2.
+FFXIV server, built to run in a rootless Podman container. Version 2.25.0.
 
 How its features work, and how they depend on the ArchonEngine, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -238,7 +238,7 @@ keeps a list of everything sent (when, by whom, how many accounts got it). Overv
 keeps a quick form for it too.
 
 It has its own layout: a sidebar grouped by job — **Server** (Overview, Logs,
-Diagnostics), **Build & config** (Setup, Updates & branches, Server config), **Game
+Diagnostics, Battle replay), **Build & config** (Setup, Updates & branches, Server config), **Game
 data** (Database & accounts, Marketboard), **Content** (Quest lab, Quest progress,
 Duties & zones) and **Community** (Shop, Announcements, Branding) — and a header with
 the page's group and title. Shop management and listing editing live in the dashboard
@@ -534,6 +534,34 @@ is kept in `<web>/diag/battles`, and is filed in the diagnostics repository unde
 (with `battles/index.json` listing every battle and its label). The Diagnostics page lists them; *File now*
 retries one that couldn't be filed. A bundle's README names the battles received during its window.
 
+**Marks** (2.25.0). Typing `!mark <what you saw>` in game (Say or the default channel; anyone can) writes a note into
+the packet capture at that moment, with your zone, position, facing and quest steps. A bundle's README lists the marks
+in its captures with the file and line, so whoever reads it knows *when* it went wrong.
+
+**Why am I stuck?** Kawari Probe 0.7.0's `/kprobe stuck` window shows what the game client says is stopping you
+(conditions, animation lock, cast, queued action, item moves waiting on the server, the actions it refused and why);
+*Send snapshot* puts it in the next bundle.
+
+## Battle replay
+
+**Dashboard → Battle replay** (2.25.0) puts a retail fight and a Kawari one side by side on a top-down map, on one
+clock: where everyone stood and faced, each cast's area as the game draws it, who hit whom for how much, knockbacks,
+deaths, the director's steps and your `!mark`s.
+
+* Pick a source for each side. **Retail**: a Kawari Recorder battle (from Diagnostics), or a battle run you upload
+  here: `python3 tools/questkit chronofoil <capture> --battle N.V --out run.json.gz` in the Kawari repository makes one
+  from a Chronofoil capture (`questkit chronofoil <capture>` lists the visits). **Kawari**: one of the server's packet
+  captures (turn capture on in Diagnostics and play the fight), then the zone visit (the busiest is picked for you).
+  Either side can be either kind.
+* **Read the action list from the game** once (and again after a game update): it runs `kawari-questdump actions`
+  on the server's own game install and writes `action-index.json` beside the quest index, which names the actions and
+  gives their areas. Without it, casts are dots with their IDs.
+* Play, scrub, or use the arrow keys (shift for 5 s) and space. Line the two fights up with *First hostile hit* on
+  each side, or type where each side's 0 s is. Click the strip under a map, or a row of its log, to jump there.
+* Drag to pan, wheel to zoom; hover an actor for its numbers. *Same map* uses one view for both when they're in the
+  same zone.
+* The address keeps both choices (`?a=...&b=...`), so a comparison can be bookmarked or sent.
+
 It needs the repository (`owner/name`) and a fine-grained GitHub token limited
 to that one repository with *Contents: Read and write*. Game files never go in a
 bundle.
@@ -770,10 +798,10 @@ is now the complete one.
 ```
 kawari_core/     shared, Qt-free: dbtools, chardata, auracite, schemagen,
                  versions, upstream, questlab, progress, shop, marketboard,
-                 gamedata, constants, core
+                 battle_replay, gamedata, constants, core
 kawari_web/      Flask app: config, webdb, auth, podman_api, stats, app,
                  dashboard, upstreamcfg, srcbuild, questlab, progress, shop,
-                 marketboard, templates/, static/ (style.css, app.js, fonts/)
+                 marketboard, replay, templates/, static/ (style.css, app.js, fonts/)
 Containerfile    rootless-friendly image, runs as a non-root user
 run.sh           build + run with the right mounts
 kawari-web.container  systemd quadlet unit
