@@ -1,7 +1,7 @@
 # Kawari Web
 
 A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
-FFXIV server, built to run in a rootless Podman container. Version 2.24.1.
+FFXIV server, built to run in a rootless Podman container. Version 2.24.2.
 
 How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -357,7 +357,11 @@ every quest from A Realm Reborn to Dawntrail, against the quest scripts in the
   journal never shows (unused or internal rows) aren't counted.
 * **Implemented / verified.** Implemented means the build has the quest's script
   (`resources/scripts/events/quest/<id / 100>/<script>.lua`); verified means the
-  script's header says it was checked against a retail recording.
+  script's header says it was checked against retail: a "Checked against ..."
+  sentence naming a Chronofoil capture, a Kawari Recorder export or a recording,
+  as the fork's headers do (since 2.24.2; before, only the word "recording"
+  counted, so most checked quests showed as Implemented). A header that says
+  "unverified" counts as Implemented.
 * Totals per expansion for Main Scenario and side quests, then the full list,
   filterable by expansion, type, journal section, status and a search by ID,
   script or name. Each quest links to its Quest Lab page.

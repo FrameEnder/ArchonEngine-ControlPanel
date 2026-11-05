@@ -10,7 +10,11 @@ genre).
 A quest counts as implemented when the ACTIVE BUILD has its script,
 ``resources/scripts/events/quest/<id // 100>/<script>.lua`` - what the running
 server actually has. A script whose header says it was checked against a live
-recording is shown as verified.
+recording is shown as verified: a "checked against ..." sentence in its header
+comment that names a Chronofoil capture, a Kawari Recorder export or a
+recording (the fork's headers, ``docs/src/fork/quests.md``), or one of the
+older phrasings ("recording", "recorded on retail"). A header that says
+"unverified" isn't, whatever else it says.
 """
 
 from __future__ import annotations
@@ -38,8 +42,16 @@ STATUS_LABELS = {
     "missing": "Not implemented",
 }
 
-# How a script's header says it was checked against retail.
+# How a script's header says it was checked against retail. The fork's headers
+# say "Checked against the client's quest script (...) and Bob's Chronofoil
+# capture ..." (or a Kawari Recorder export); only "recording" was looked for
+# before 2.24.2, so 21 of 178 showed as verified.
 _VERIFIED = re.compile(r"\b(recording|recorded on retail|retail recording)\b", re.I)
+# One sentence ("[^.]": up to its full stop), however many comment lines it runs over.
+_CHECKED_AGAINST = re.compile(
+    r"\b(?:checked|verified)\b[^.]*?\bagainst\b[^.]*?"
+    r"(?:\bcapture|\brecording|\brecorder\b|recorded on retail)", re.I)
+_UNVERIFIED = re.compile(r"\bunverified\b", re.I)
 _HEADER_LINES = 30
 
 
@@ -147,15 +159,36 @@ def build_scripts(build_dir: Path | None) -> dict[str, Path]:
     return {path.stem: path for path in root.glob("*/*.lua")}
 
 
+def header_text(lines) -> str:
+    """The script's opening comment as one line of text (comment marks taken off)."""
+    out = []
+    for line in lines:
+        text = line.strip()
+        if not text.startswith("--"):
+            break
+        out.append(text.lstrip("-").strip())
+    return " ".join(out)
+
+
+def header_status(lines) -> str:
+    """verified or implemented, from a script's first lines."""
+    text = header_text(lines)
+    if _UNVERIFIED.search(text):
+        return "implemented"
+    if _CHECKED_AGAINST.search(text) or _VERIFIED.search(text):
+        return "verified"
+    return "implemented"
+
+
 def script_status(path: Path | None) -> str:
     if path is None:
         return "missing"
     try:
         with path.open(errors="replace") as handle:
-            header = "".join(next(handle, "") for _ in range(_HEADER_LINES))
+            lines = [next(handle, "") for _ in range(_HEADER_LINES)]
     except OSError:
         return "implemented"
-    return "verified" if _VERIFIED.search(header) else "implemented"
+    return header_status(lines)
 
 
 def load(root: Path, build_dir: Path | None) -> Progress:

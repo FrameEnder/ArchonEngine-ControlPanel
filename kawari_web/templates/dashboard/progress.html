@@ -33,7 +33,7 @@
   <p class="dim">Every quest the game's journal lists, from your game install's quest index (built
      {{ index_time }}), against the quest scripts in the active build{% if build %} (<span class="mono">{{ build }}</span>){% endif %}.
      <b>Implemented</b> means the build has the quest's script; <b>verified</b> means its header says it was
-     checked against a retail recording.</p>
+     checked against retail (a Chronofoil capture, a Kawari Recorder export or a recording).</p>
   {% if not data.has_journal_data %}
   <p class="line err">This quest index was built before it recorded which quests are main scenario and where the
      journal files them, so every quest shows as a side quest. Build the fork again, then build the quest index.</p>
