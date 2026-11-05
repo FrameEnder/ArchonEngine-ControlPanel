@@ -1,13 +1,10 @@
-# Kawari Web
+# ArchonEngine ControlPanel
 
-A browser front end for a self-hosted [Kawari](https://github.com/redstrate/Kawari)
+A browser management/deployment front end for a self-hosted [ArchonEngine](https://github.com/FrameEnder/ArchonEngine)
 FFXIV server, built to run in a rootless Podman container. Version 2.24.2.
 
-How its features work, and how they depend on the FrameEnder fork of Kawari, is documented in the fork's
+How its features work, and how they depend on the ArchonEngine, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
-
-It shares its logic with the desktop manager: `kawari_core/` is the same
-database, Auracite, schema and version code, with the Qt dependency removed.
 
 ## Run it
 
@@ -16,11 +13,8 @@ cd ~/Documents/Server/FFXIV/kawari-web
 ./run.sh
 ```
 
-Then open `http://127.0.0.1:7301`. Use the literal address, not `localhost`:
-`localhost` resolves to the IPv6 loopback `::1` first on most systems, and
-rootless Podman publishes on IPv4 only, so the browser's first attempt is refused
-and it does not fall back. From another machine, use the server's LAN or
-Tailscale address and open the port in firewalld.
+Then open `http://127.0.0.1:7301`, or use the server's LAN or
+Tailscale address if configured to do so, open the port in firewalld, or other firewall solutions if not already.
 
 `run.sh` builds the image, mounts your
 `~/.kawari` directory, and mounts the rootless Podman API socket if it exists.
