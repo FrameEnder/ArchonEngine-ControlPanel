@@ -9,6 +9,7 @@ from flask import (
     Blueprint, Flask, abort, current_app, flash, g, redirect, render_template,
     request, send_from_directory, session, url_for,
 )
+from markupsafe import escape
 
 from kawari_core import dbtools
 
@@ -72,7 +73,7 @@ def create_app(settings: Settings | None = None) -> Flask:
                         "again.</p>"), 400
         # Until an administrator exists, everything redirects to first-run setup.
         if not webdb.has_any_profile(settings.webapp_db):
-            allowed = {"main.setup", "main.static_upload", "static",
+            allowed = {"main.setup", "main.static_upload", "main.favicon", "static",
                        "api.sync", "api.ping", "api.diag_snapshot", "api.diag_ping", "api.diag_battle"}
             if request.endpoint not in allowed:
                 return redirect(url_for("main.setup"))
@@ -425,12 +426,22 @@ def static_upload(name: str):
 
 @main.route("/favicon.ico")
 def favicon():
-    """Emoji favicon rendered as an SVG, so branding needs no file upload."""
-    brand = webdb.branding(_settings().webapp_db)
-    emoji = brand.get("favicon_emoji") or "\U0001F30D"
-    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
-           f'<text y="52" font-size="52">{emoji}</text></svg>')
-    return svg, 200, {"Content-Type": "image/svg+xml"}
+    """The favicon: the branding's emoji if one is set, else the uploaded logo, else ArchonEngine's mark
+    (static/logo/favicon.svg, which turns light on a dark browser)."""
+    settings = _settings()
+    brand = webdb.branding(settings.webapp_db)
+    emoji = (brand.get("favicon_emoji") or "").strip()
+    if emoji:
+        svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
+               f'<text y="52" font-size="52">{escape(emoji)}</text></svg>')
+        return svg, 200, {"Content-Type": "image/svg+xml", "Cache-Control": "no-cache"}
+    if brand.get("logo") and (Path(settings.uploads) / brand["logo"]).is_file():
+        response = send_from_directory(settings.uploads, brand["logo"])
+    else:
+        response = send_from_directory(Path(current_app.static_folder) / "logo", "favicon.svg",
+                                       mimetype="image/svg+xml")
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────

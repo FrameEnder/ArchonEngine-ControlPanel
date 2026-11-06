@@ -1,4 +1,4 @@
-# Kawari Web
+# ArchonEngine ControlPanel (Kawari Web)
 
 Bob's web front end for his FrameEnder/Kawari server. The README is the user guide.
 

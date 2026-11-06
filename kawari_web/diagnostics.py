@@ -473,7 +473,7 @@ class GitHub:
         self._call("PUT", "/contents/README.md", {
             "message": "Start the diagnostics repository",
             "content": base64.b64encode(
-                b"# Kawari diagnostics\n\nBundles sent from Kawari Web's Diagnostics page.\n"
+                b"# Kawari diagnostics\n\nBundles sent from ArchonEngine ControlPanel's Diagnostics page.\n"
             ).decode(),
             "branch": self.branch,
         })

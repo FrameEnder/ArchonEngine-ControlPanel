@@ -378,7 +378,7 @@ def quest_prepare(quest_id: int):
 # ════════════════════════════════════════════════════════════════════════════
 def _manifest(rows, build) -> str:
     lines = ["# Quest bundle", "",
-             f"Made by Kawari Web on {time.strftime('%Y-%m-%d %H:%M')}"
+             f"Made by ArchonEngine ControlPanel on {time.strftime('%Y-%m-%d %H:%M')}"
              + (f" from build {BuildStore(settings().data_dir).ledger.active_entry.short}"
                 if build else "") + ".", "",
              "* `quest-dumps/<script>/` is kawari-questdump's output: quest.json, the client's",
@@ -551,7 +551,7 @@ def script_check_bundle():
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("client-check.md", clientcheck.report(checks, missing, show_all=True, scripts=scripts))
         zf.writestr("README.md", "# Script Check bundle\n\n"
-                    f"Made by Kawari Web on {time.strftime('%Y-%m-%d %H:%M')} from build "
+                    f"Made by ArchonEngine ControlPanel on {time.strftime('%Y-%m-%d %H:%M')} from build "
                     f"{BuildStore(settings().data_dir).ledger.active_entry.short}.\n\n"
                     "* `client-check.md`: the report.\n"
                     "* `client-scripts/`: kawari-questdump scripts' output (the client's scripts, their listings, "

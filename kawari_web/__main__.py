@@ -16,7 +16,7 @@ def main() -> int:
     # Printed before anything can fail, so the log always identifies which build
     # is actually running and which identity it has.
     sys.stderr.write(
-        f"Kawari Web {__version__} starting\n"
+        f"ArchonEngine ControlPanel {__version__} starting\n"
         f"  uid={os.getuid()} gid={os.getgid()}\n"
         f"  data dir : {settings.data_dir}\n"
         f"  web dir  : {settings.web_dir}\n"
@@ -33,11 +33,11 @@ def main() -> int:
         app = create_app(settings)
     except PermissionError as exc:
         # One clear message beats the same traceback every restart.
-        sys.stderr.write(f"\nKawari Web cannot start.\n\n{exc}\n\n")
+        sys.stderr.write(f"\nArchonEngine ControlPanel cannot start.\n\n{exc}\n\n")
         return 1
     try:
         from waitress import serve
-        print(f"Kawari Web on http://{settings.host}:{settings.port}  "
+        print(f"ArchonEngine ControlPanel on http://{settings.host}:{settings.port}  "
               f"(data: {settings.data_dir})")
         serve(app, host=settings.host, port=settings.port, threads=8)
     except ImportError:

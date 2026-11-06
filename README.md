@@ -1,7 +1,7 @@
 # ArchonEngine ControlPanel
 
 A browser management/deployment front end for a self-hosted [ArchonEngine](https://github.com/FrameEnder/ArchonEngine)
-FFXIV server, built to run in a rootless Podman container. Version 2.25.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.26.0.
 
 How its features work, and how they depend on the ArchonEngine, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -130,7 +130,7 @@ the running image contains the current code. Since 2.1.3 the app also prints a
 banner before anything can fail:
 
 ```
-Kawari Web 2.1.3 starting
+ArchonEngine ControlPanel 2.26.0 starting
   uid=1000 gid=1000
   data dir : /data
   data dir owner uid=1000 gid=1000, writable=True
@@ -225,7 +225,7 @@ so absence means hidden.
 **Dashboard** (administrators only) — server start/stop/restart, service and
 client-version checks (Overview's **Client compatibility** compares your client's
 `.ver` files with what the active build supports — the same *Supports* as Updates. In
-the container Kawari Web can't see the game folder, so it reads them through a
+the container ArchonEngine ControlPanel can't see the game folder, so it reads them through a
 short-lived container from the server's image with the install mounted read-only, and
 keeps the answer for ten minutes; **Check again** reads them now), the full `config.yaml` editor, database health and
 migration, backups, account creation and admin promotion, Auracite import and
@@ -256,9 +256,17 @@ removed at the end of every install. Backups and a character's snapshots can als
 ticked and deleted together.
 
 **Branding** — server name, tagline, emoji favicon, logo, accent colour, light or
-dark theme, footer text, and the Home page links. The default accent is `#5aa9f0`; an
-accent already saved is kept. Text on accent-coloured buttons is picked automatically
-(dark or white, whichever reads better), so any accent stays legible.
+dark theme, footer text, and the Home page links. The defaults (2.26.0) are ArchonEngine
+ControlPanel's: that name, ArchonEngine's mark as the logo and the favicon, and a purple
+accent (`#b170c2`) from the mark's hue. The mark is drawn in its own `#361B3D` on the light
+theme and a light tint of it (`#CFACD7`) on the dark one, where the dark purple wouldn't show;
+the favicon does the same with the browser's theme. An uploaded logo replaces the mark in
+both places, and an emoji, if one is set, is the favicon instead. A panel still on Kawari
+Web's defaults (the name "Kawari", the globe emoji, the blue accent) gets the new ones once,
+when it starts; anything else already saved is kept. The mark's files are in
+`kawari_web/static/logo/` (`mark.svg`, `favicon.svg`, and PNGs for browsers without SVG
+favicons). Text on accent-coloured buttons is picked automatically (dark or white, whichever
+reads better), so any accent stays legible.
 
 ## Quest Lab
 
@@ -460,13 +468,13 @@ it changes, so a new list applies to the next bot that joins, with no restart.
 
 * **The Kawari Glamour Collector** (a Chrome extension, in the Kawari
   repository's `tools/glamour-collector`) collects glamours from Eorzea
-  Collection and sends the list here. In its popup, under **Kawari Web**, give
+  Collection and sends the list here. In its popup, under **ArchonEngine ControlPanel**, give
   this site's address as your browser reaches it (on your LAN, e.g.
   `http://192.168.1.20:8080`, or your tailnet, e.g.
   `http://myserver.tail1234.ts.net:8080`) and your token from **Settings →
   Character sync**; it must be an administrator's. **Connect** asks Chrome to let
-  the extension reach that address, then **Send to Kawari Web** replaces the list
-  and **Load from Kawari Web** adds the server's glamours to the extension's.
+  the extension reach that address, then **Send to ControlPanel** replaces the list
+  and **Load from ControlPanel** adds the server's glamours to the extension's.
 * **The class list**: the extension's Class dropdown is filled from your game
   install's classes and jobs. **Read the class list from the game** runs
   `kawari-questdump classes` (the fork's), which writes `class-index.json`.
@@ -485,7 +493,7 @@ and a character who is logged in on a running server is refused, since the world
 when they log out. **Inspect only** shows what a backup holds without importing anything.
 
 Backups from the **extended Auracite plugin** (Auracite for Kawari, in the kawari-diagnostics repository) carry a
-`kawari_extended` section on top of Auracite's own. Kawari Web imports what Kawari has a place for:
+`kawari_extended` section on top of Auracite's own. ArchonEngine ControlPanel imports what Kawari has a place for:
 
 * **Inventory**: crystals, key items, the chocobo saddlebag, and the glamour dresser, glamour plates and armoire.
   Before 2.22.3 the saddlebag was skipped for a character saved before Kawari had one, so a backup imported then
@@ -500,7 +508,7 @@ Backups from the **extended Auracite plugin** (Auracite for Kawari, in the kawar
 
 Gear sets, hotbars, macros and the UI layout aren't on any server: the game keeps them on your PC under the
 character's content ID, which differs on Kawari. The plugin backs those files up and restores them into your Kawari
-character's folder itself (its window's *Settings files* section); Kawari Web only keeps them.
+character's folder itself (its window's *Settings files* section); ArchonEngine ControlPanel only keeps them.
 
 Some of it only exists in the game once its window has been opened (the glamour dresser, the armoire, the saddlebag,
 achievements, a retainer's items): the plugin marks those "not loaded" when they weren't, and the import leaves what
@@ -528,7 +536,7 @@ needs, and commits it as one bundle to a private GitHub repository:
 * which build is running, and the server config with secrets removed.
 
 **Battles from Kawari Recorder.** The Recorder (2.6+) can send each retail battle it records straight here:
-in its Battles tab, under *Send to Kawari Web*, enter this site's address and your character sync token
+in its Battles tab, under *Send to ArchonEngine ControlPanel*, enter this site's address and your character sync token
 (the same as the Probe's), then *Test*. Each battle arrives at `POST /api/diag/battle` as one gzipped file,
 is kept in `<web>/diag/battles`, and is filed in the diagnostics repository under `battles/` straight away
 (with `battles/index.json` listing every battle and its label). The Diagnostics page lists them; *File now*

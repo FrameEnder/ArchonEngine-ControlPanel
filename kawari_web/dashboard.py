@@ -130,10 +130,11 @@ def branding():
             if label and url:
                 links.append({"label": label, "url": url})
         values = {
-            "site_name": (request.form.get("site_name") or "Kawari").strip()[:60],
+            "site_name": ((request.form.get("site_name") or "").strip()
+                          or webdb.BRANDING_DEFAULTS["site_name"])[:60],
             "tagline": (request.form.get("tagline") or "").strip()[:160],
             "favicon_emoji": (request.form.get("favicon_emoji") or "").strip()[:8],
-            "accent": (request.form.get("accent") or "#7c6cff").strip()[:20],
+            "accent": ((request.form.get("accent") or "").strip() or webdb.BRANDING_DEFAULTS["accent"])[:20],
             "theme": "light" if request.form.get("theme") == "light" else "dark",
             "footer": (request.form.get("footer") or "").strip()[:300],
             "links_json": json.dumps(links),
@@ -463,7 +464,7 @@ def export_character(content_id: int):
         ch = chardata.load(settings.world_db, content_id)
         data = auracite.export_character(
             ch, kept_extended=auracite.stored_extended(settings.world_db, content_id),
-            exporter=f"Kawari Web {__version__}")
+            exporter=f"ArchonEngine ControlPanel {__version__}")
     except Exception as exc:                            # noqa: BLE001
         flash(f"Export failed: {exc}", "err")
         return redirect(url_for("dashboard.database"))

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and run Kawari Web in rootless Podman.
+# Build and run ArchonEngine ControlPanel in rootless Podman.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -74,7 +74,7 @@ echo "--------------------------------------------------------"
 # Deliberately 127.0.0.1 and not "localhost": localhost usually resolves to ::1
 # first, and rootless Podman publishes on IPv4 only, so the v6 attempt is refused
 # with no fallback.
-echo "Kawari Web is starting on http://127.0.0.1:${PORT}"
+echo "ArchonEngine ControlPanel is starting on http://127.0.0.1:${PORT}"
 LAN_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')
 TS_IP=$(tailscale ip -4 2>/dev/null | head -1)
 for addr in $LAN_IP $TS_IP; do

@@ -1,7 +1,7 @@
 """Item icons from the game, as PNGs a browser can show.
 
 The game keeps icons as ``.tex`` textures under ``ui/icon/`` in its sqpack.
-Kawari Web never ships them: ``kawari-questdump extract`` copies the ones the
+ArchonEngine ControlPanel never ships them: ``kawari-questdump extract`` copies the ones the
 shop needs out of the server's own game install, and this turns each into a
 PNG in the data folder (Pillow decodes the compressed formats).
 

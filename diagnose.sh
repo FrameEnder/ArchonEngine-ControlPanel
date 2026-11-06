@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Kawari Web diagnostics - answers "which build is running, and who can write what".
+# ArchonEngine ControlPanel diagnostics - answers "which build is running, and who can write what".
 NAME="${NAME:-kawari-web}"
 IMAGE="${IMAGE:-kawari-web}"
 DATA_DIR="${DATA_DIR:-$HOME/.kawari}"

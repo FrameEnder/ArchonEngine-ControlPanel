@@ -115,10 +115,12 @@ POST_MAX = 2000
 COMMENT_MAX = 1000
 
 BRANDING_DEFAULTS = {
-    "site_name": "Kawari",
+    "site_name": "ArchonEngine ControlPanel",
     "tagline": "A private Final Fantasy XIV server",
-    "favicon_emoji": "\U0001F30D",
-    "accent": "#5aa9f0",
+    # Empty: the favicon is the logo (the uploaded one, or ArchonEngine's mark).
+    "favicon_emoji": "",
+    # The ArchonEngine mark's hue (#361B3D), light enough for buttons on both themes.
+    "accent": "#b170c2",
     "theme": "dark",
     "logo": "",
     "footer": "",
@@ -129,6 +131,17 @@ BRANDING_DEFAULTS = {
         {"label": "Auracite (character backups)", "url": "https://auracite.xiv.zone/"},
     ]),
 }
+
+
+# The defaults before 2.26.0, when the panel was Kawari Web. The Branding page saves every field, so a panel
+# saved with them has them stored: init() changes them to today's defaults once (branding_defaults = 2), and
+# after that they're Bob's to set again if he wants them.
+OLD_BRANDING_DEFAULTS = {
+    "site_name": "Kawari",
+    "favicon_emoji": "\U0001F30D",
+    "accent": "#5aa9f0",
+}
+BRANDING_DEFAULTS_VERSION = "2"
 
 
 def connect(path: Path) -> sqlite3.Connection:
@@ -142,9 +155,22 @@ def init(path: Path) -> None:
     conn = connect(path)
     try:
         conn.executescript(SCHEMA)
+        _migrate_branding(conn)
         conn.commit()
     finally:
         conn.close()
+
+
+def _migrate_branding(conn: sqlite3.Connection) -> None:
+    """Stored branding still at Kawari Web's defaults becomes ArchonEngine ControlPanel's, once."""
+    row = conn.execute("SELECT value FROM setting WHERE key = 'branding_defaults'").fetchone()
+    if row and row["value"] >= BRANDING_DEFAULTS_VERSION:
+        return
+    for key, old in OLD_BRANDING_DEFAULTS.items():
+        conn.execute("UPDATE setting SET value = ? WHERE key = ? AND lower(value) = lower(?)",
+                     (BRANDING_DEFAULTS[key], key, old))
+    conn.execute("INSERT INTO setting (key, value) VALUES ('branding_defaults', ?) "
+                 "ON CONFLICT(key) DO UPDATE SET value = excluded.value", (BRANDING_DEFAULTS_VERSION,))
 
 
 # ── settings / branding ─────────────────────────────────────────────────────

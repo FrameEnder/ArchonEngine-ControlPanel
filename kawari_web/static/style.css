@@ -1,4 +1,4 @@
-/* Kawari Web — one stylesheet. The fonts are bundled in static/fonts, so the
+/* ArchonEngine ControlPanel — one stylesheet. The fonts are bundled in static/fonts, so the
    app still works fully offline inside its container. --accent is injected
    per request from the branding settings, and --on-accent is worked out from
    it so text on accent-coloured buttons stays readable. */
@@ -15,8 +15,10 @@
 
 /* ── tokens ─────────────────────────────────────────────────────────── */
 :root {
-    --accent: #5aa9f0;
+    --accent: #b170c2;
     --on-accent: #0b1220;
+    /* ArchonEngine's mark: #361B3D on light grounds, a light tint of it on dark ones. */
+    --logo: #cfacd7;
 
     --bg: #0e1116;
     --header: #12161c;
@@ -53,6 +55,7 @@
 
 html[data-theme="light"] {
     --on-accent: #0b1220;
+    --logo: #361b3d;
     --bg: #f4f5f8;
     --header: #ffffff;
     --surface: #ffffff;
@@ -149,7 +152,7 @@ svg.icon.sm { width: 18px; height: 18px; }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-family: var(--font-display); font-weight: 600; font-size: 18px; letter-spacing: -0.01em; min-width: 0; }
 .brand:hover { color: var(--text); text-decoration: none; }
 .brand img { height: 30px; width: auto; border-radius: 7px; }
-.brand-mark { width: 28px; height: 28px; flex: none; }
+.brand-mark { height: 30px; width: auto; aspect-ratio: 327 / 425; flex: none; }
 .brand-emoji { font-size: 1.4rem; }
 
 .topbar .mainnav { display: flex; flex-wrap: wrap; gap: 4px; flex: 1 1 auto; }
@@ -192,7 +195,7 @@ footer.site-foot .inner {
 html:not([data-theme="light"]) body.admin .admin-side { background: #11141a; }
 .side-brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
 .side-brand .brand { font-size: 16px; }
-.side-brand .brand-mark { width: 26px; height: 26px; }
+.side-brand .brand-mark { height: 26px; }
 .admin-badge {
     margin-left: auto; padding: 2px 8px; border-radius: 6px;
     background: var(--admin-bg); color: var(--gil); font-size: 11px; font-weight: 600; letter-spacing: .04em;
@@ -1147,7 +1150,7 @@ input.price { width: 8rem; font-variant-numeric: tabular-nums; }
     display: flex; flex-direction: column; gap: 24px;
 }
 .entry-authhead { display: flex; flex-direction: column; gap: 8px; }
-.entry-authhead .brand-mark { width: 36px; height: 36px; }
+.entry-authhead .brand-mark { height: 44px; }
 .entry-authhead h1 { margin: 8px 0 0; font-size: 28px; }
 .entry-authhead p { margin: 0; }
 .entry-form { display: flex; flex-direction: column; gap: 16px; }

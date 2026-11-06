@@ -1,4 +1,4 @@
-# Quadlet unit for Kawari Web. The installer writes this for you with your own
+# Quadlet unit for ArchonEngine ControlPanel. The installer writes this for you with your own
 # paths filled in:
 #
 #     ./install-service.sh
@@ -10,7 +10,7 @@
 #     systemctl --user daemon-reload
 #     systemctl --user start kawari-web
 [Unit]
-Description=Kawari Web
+Description=ArchonEngine ControlPanel
 After=network-online.target podman.socket
 Wants=network-online.target
 

@@ -1,6 +1,6 @@
 """The game client's own version, for Overview's Client compatibility card.
 
-The versions are in the game install's .ver files. When Kawari Web runs in its
+The versions are in the game install's .ver files. When ArchonEngine ControlPanel runs in its
 container it can't see them: only the data folder is mounted, and the game
 usually lives elsewhere. So when they can't be read directly, they're read the
 way kawari-questdump reads game files: a short-lived container from the
@@ -51,10 +51,10 @@ def _from_container(settings, podman) -> dict:
     game = Path(settings.shell.game_path)
     image = f"{settings.shell.image}:latest"
     if podman.mode != "socket":
-        return _empty("container", "Kawari Web can't see the game folder, and reading it "
+        return _empty("container", "ArchonEngine ControlPanel can't see the game folder, and reading it "
                                    "another way needs the Podman API socket.")
     if not podman.image_exists(image):
-        return _empty("container", "Kawari Web can't see the game folder, and there's no "
+        return _empty("container", "ArchonEngine ControlPanel can't see the game folder, and there's no "
                                    "server image yet to read it with (install Kawari on Setup).")
     folder = shlex.quote(game.name)
     # Print "path<TAB>contents" for each .ver file that exists.

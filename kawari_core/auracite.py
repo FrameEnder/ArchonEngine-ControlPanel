@@ -769,7 +769,7 @@ def _export_container(storage) -> dict:
 
 
 def export_extended(ch: chardata.Character, kept: dict | None = None,
-                    exporter: str = "Kawari Web") -> dict:
+                    exporter: str = "ArchonEngine ControlPanel") -> dict:
     """Build kawari_extended from Kawari's data, over what an import kept.
 
     Sections Kawari stores are written from its tables (they may have changed in
@@ -856,7 +856,7 @@ def export_extended(ch: chardata.Character, kept: dict | None = None,
 
 
 def export_character(ch: chardata.Character, world_name: str = "",
-                     kept_extended: dict | None = None, exporter: str = "Kawari Web") -> dict:
+                     kept_extended: dict | None = None, exporter: str = "ArchonEngine ControlPanel") -> dict:
     """Build an Auracite-shaped character.json from a Kawari character.
 
     Emits every key upstream's importer reads, so the result round-trips: export

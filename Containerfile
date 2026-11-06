@@ -1,4 +1,4 @@
-# Kawari Web — a browser front end for a self-hosted Kawari FFXIV server.
+# ArchonEngine ControlPanel — a browser front end for a self-hosted ArchonEngine (Kawari) FFXIV server.
 #
 # Runs as a non-root user. Mount the Kawari config directory read-write (it holds
 # the databases, config.yaml and backups) and, optionally, the rootless Podman

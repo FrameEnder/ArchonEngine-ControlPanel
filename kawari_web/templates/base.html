@@ -4,7 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}{{ branding.site_name }}{% endblock %}</title>
-<link rel="icon" href="{{ url_for('main.favicon') }}">
+{#- /favicon.ico is the emoji, the uploaded logo or ArchonEngine's mark (an SVG); the PNG comes first with its size
+    so browsers that can use the SVG take it. -#}
+{% if branding.favicon_emoji %}<link rel="icon" href="{{ url_for('main.favicon') }}" type="image/svg+xml">
+{% elif branding.logo %}<link rel="icon" href="{{ url_for('main.favicon') }}">
+{% else %}<link rel="icon" href="{{ url_for('static', filename='logo/favicon-32.png') }}" sizes="32x32">
+<link rel="icon" href="{{ url_for('main.favicon') }}" type="image/svg+xml">
+{% endif %}<link rel="apple-touch-icon" href="{{ url_for('main.static_upload', name=branding.logo) if branding.logo else url_for('static', filename='logo/apple-touch-icon.png') }}">
 <link rel="preload" href="{{ url_for('static', filename='fonts/ibm-plex-sans-latin-400-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=app_version) }}">
 <style>
@@ -102,7 +108,7 @@
 <footer class="site-foot">
   <div class="inner">
     <span>{{ branding.footer or branding.tagline }}</span>
-    <span>Powered by Kawari</span>
+    <span>Powered by ArchonEngine</span>
   </div>
 </footer>
 {% endblock %}

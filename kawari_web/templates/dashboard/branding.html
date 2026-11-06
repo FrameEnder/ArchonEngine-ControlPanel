@@ -7,8 +7,11 @@
     <h2>Identity</h2>
     <label>Server name <input name="site_name" value="{{ brand.site_name }}" maxlength="60"></label>
     <label>Tagline <input name="tagline" value="{{ brand.tagline }}" maxlength="160"></label>
-    <label>Favicon emoji <input name="favicon_emoji" value="{{ brand.favicon_emoji }}" maxlength="8"></label>
+    <label>Favicon emoji <input name="favicon_emoji" value="{{ brand.favicon_emoji }}" maxlength="8"
+      placeholder="Empty: the logo"></label>
     <label>Logo image <input type="file" name="logo" accept="image/*"></label>
+    <p class="dim small">Without an uploaded logo the site shows ArchonEngine's mark, and the favicon is the logo
+       unless an emoji is set above.</p>
     {% if brand.logo %}
       <p><img class="logo-preview" src="{{ url_for('main.static_upload', name=brand.logo) }}" alt="">
          <label class="inline"><input type="checkbox" name="clear_logo" value="1"> remove logo</label></p>

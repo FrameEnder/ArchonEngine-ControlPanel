@@ -1,4 +1,4 @@
-"""How much old data Kawari Web keeps: database backups, character snapshots and builds.
+"""How much old data ArchonEngine ControlPanel keeps: database backups, character snapshots and builds.
 
 Every update and build switch takes a backup of both databases and a snapshot of every character, and every edit,
 sync or import snapshots the character first. Without a limit they pile up on every update, so each is capped:
