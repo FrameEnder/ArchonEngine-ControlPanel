@@ -1,7 +1,7 @@
 # ArchonEngine ControlPanel
 
 A browser management/deployment front end for a self-hosted [ArchonEngine](https://github.com/FrameEnder/ArchonEngine)
-FFXIV server, built to run in a rootless Podman container. Version 2.26.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.26.1.
 
 How its features work, and how they depend on the ArchonEngine, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -130,7 +130,7 @@ the running image contains the current code. Since 2.1.3 the app also prints a
 banner before anything can fail:
 
 ```
-ArchonEngine ControlPanel 2.26.0 starting
+ArchonEngine ControlPanel 2.26.1 starting
   uid=1000 gid=1000
   data dir : /data
   data dir owner uid=1000 gid=1000, writable=True
@@ -258,9 +258,9 @@ ticked and deleted together.
 **Branding** — server name, tagline, emoji favicon, logo, accent colour, light or
 dark theme, footer text, and the Home page links. The defaults (2.26.0) are ArchonEngine
 ControlPanel's: that name, ArchonEngine's mark as the logo and the favicon, and a purple
-accent (`#b170c2`) from the mark's hue. The mark is drawn in its own `#361B3D` on the light
-theme and a light tint of it (`#CFACD7`) on the dark one, where the dark purple wouldn't show;
-the favicon does the same with the browser's theme. An uploaded logo replaces the mark in
+accent (`#b170c2`) from the mark's hue. The mark is always drawn in its own `#361B3D`, with a
+shadow for contrast in the theme's opposite colour (2.26.1): white on the dark theme, black on
+the light one; the favicon does the same with the browser's theme. An uploaded logo replaces the mark in
 both places, and an emoji, if one is set, is the favicon instead. A panel still on Kawari
 Web's defaults (the name "Kawari", the globe emoji, the blue accent) gets the new ones once,
 when it starts; anything else already saved is kept. The mark's files are in

@@ -17,8 +17,10 @@
 :root {
     --accent: #b170c2;
     --on-accent: #0b1220;
-    /* ArchonEngine's mark: #361B3D on light grounds, a light tint of it on dark ones. */
-    --logo: #cfacd7;
+    /* ArchonEngine's mark keeps its #361B3D on both themes; a shadow in the theme's opposite colour gives it
+       contrast (white here on the dark theme, black on the light one). */
+    --logo: #361b3d;
+    --logo-shadow: rgba(255, 255, 255, 0.9);
 
     --bg: #0e1116;
     --header: #12161c;
@@ -55,7 +57,7 @@
 
 html[data-theme="light"] {
     --on-accent: #0b1220;
-    --logo: #361b3d;
+    --logo-shadow: rgba(0, 0, 0, 0.45);
     --bg: #f4f5f8;
     --header: #ffffff;
     --surface: #ffffff;
@@ -152,7 +154,8 @@ svg.icon.sm { width: 18px; height: 18px; }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-family: var(--font-display); font-weight: 600; font-size: 18px; letter-spacing: -0.01em; min-width: 0; }
 .brand:hover { color: var(--text); text-decoration: none; }
 .brand img { height: 30px; width: auto; border-radius: 7px; }
-.brand-mark { height: 30px; width: auto; aspect-ratio: 327 / 425; flex: none; }
+.brand-mark { height: 30px; width: auto; aspect-ratio: 327 / 425; flex: none;
+    filter: drop-shadow(0 0 1px var(--logo-shadow)) drop-shadow(1px 1px 1.5px var(--logo-shadow)); }
 .brand-emoji { font-size: 1.4rem; }
 
 .topbar .mainnav { display: flex; flex-wrap: wrap; gap: 4px; flex: 1 1 auto; }
