@@ -1,7 +1,7 @@
 # ArchonEngine ControlPanel
 
 A browser management/deployment front end for a self-hosted [ArchonEngine](https://github.com/FrameEnder/ArchonEngine)
-FFXIV server, built to run in a rootless Podman container. Version 2.26.1.
+FFXIV server, built to run in a rootless Podman container. Version 2.27.0.
 
 How its features work, and how they depend on the ArchonEngine, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -130,7 +130,7 @@ the running image contains the current code. Since 2.1.3 the app also prints a
 banner before anything can fail:
 
 ```
-ArchonEngine ControlPanel 2.26.1 starting
+ArchonEngine ControlPanel 2.27.0 starting
   uid=1000 gid=1000
   data dir : /data
   data dir owner uid=1000 gid=1000, writable=True
@@ -239,7 +239,7 @@ keeps a quick form for it too.
 
 It has its own layout: a sidebar grouped by job — **Server** (Overview, Logs,
 Diagnostics, Battle replay), **Build & config** (Setup, Updates & branches, Server config), **Game
-data** (Database & accounts, Marketboard), **Content** (Quest lab, Quest progress,
+data** (Database & accounts, Marketboard, Bot glamours, Drop rates), **Content** (Quest lab, Quest progress,
 Duties & zones) and **Community** (Shop, Announcements, Branding) — and a header with
 the page's group and title. Shop management and listing editing live in the dashboard
 too. On a phone the sidebar folds behind a **Menu** button, which is a checkbox, so it
@@ -484,6 +484,21 @@ it changes, so a new list applies to the next bot that joins, with no restart.
 The API, for the extension (the sync token, an administrator's):
 `GET /api/glamours/ping`, `GET /api/glamours/classes`, `GET /api/glamours` (the
 list's text) and `POST /api/glamours` (`{"text": "..."}`, replaces it).
+
+## Drop rates
+
+**Dashboard → Drop rates** (2.27.0) sets how often a mount or minion in a
+dungeon's or trial's coffer drops, as a percent: one default (90 % to start
+with) and, beside each dungeon and trial, its own if you want one (blank takes
+the default). Each mount or minion a coffer may hold is rolled on its own, after
+the coffer's other items, which are picked as before. The page writes
+`drop-rates.json` in the server's data folder (beside `world.db`); the world
+server reads it again whenever it changes, so there's no restart.
+
+The duties' names come from the game: build the content index first
+(**Content → Duties & zones**, which runs `kawari-questdump content`). The
+*Scripted* column says which duties the active build has a script for: only
+those have coffers.
 
 ## Auracite backups
 

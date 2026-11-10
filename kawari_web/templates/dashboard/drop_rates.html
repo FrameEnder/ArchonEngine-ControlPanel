@@ -1,0 +1,70 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Drop rates · {{ branding.site_name }}{% endblock %}
+{% block content %}
+
+<form method="post" action="{{ url_for('dashboard.drop_rates_save') }}">
+<input type="hidden" name="csrf" value="{{ csrf_token }}">
+
+<section class="card">
+  <h2>Drop rates</h2>
+  <p class="dim">How often a mount or minion in a dungeon's or trial's coffer drops, as a percent. Each one the coffer
+     may hold is rolled on its own, after the coffer's other items (which are picked as before). A duty left blank
+     takes the default. The list is <code>{{ path.name }}</code> in the server's data folder; the world server reads it
+     again whenever it changes, so there's no restart.</p>
+  <p><label>Default <input type="number" name="default" min="0" max="100" step="1" value="{{ default }}"
+     style="width:6em"> %</label>
+     <span class="dim small">(the server's own is {{ server_default }} % when there's no file)</span></p>
+  {% if modified %}<p class="dim small">Last saved {{ modified }}.</p>{% endif %}
+  <p class="dim small mono">{{ path }}</p>
+  <p class="rowactions"><button class="btn accent">Save</button></p>
+</section>
+
+{% if not loaded %}
+<section class="card">
+  <p class="line err">The duty list hasn't been read from the game yet: Content → Duties &amp; zones → build the
+     content index, then come back.</p>
+</section>
+{% else %}
+<section class="card">
+  <p><input type="search" id="duty-filter" placeholder="Filter by name" style="width:100%"></p>
+  <p class="dim small">Scripted: the active build has the duty's script (only those have coffers).</p>
+</section>
+{% for group in groups %}
+<section class="card">
+  <h2>{{ group.name }}</h2>
+  <div class="table-wrap">
+  <table class="grid small">
+    <thead><tr><th>Duty</th><th>Level</th><th>Expansion</th><th>Scripted</th><th>Mounts &amp; minions</th></tr></thead>
+    <tbody>
+    {% for d in group.duties %}
+      <tr class="duty-row" data-name="{{ d.name | lower }}">
+        <td>{{ d.name }}</td>
+        <td>{{ d.level }}</td>
+        <td>{{ expansion_names.get(d.expansion, d.expansion) }}</td>
+        <td>{{ 'yes' if d.scripted else '' }}</td>
+        <td><input type="number" name="duty-{{ d.id }}" min="0" max="100" step="1" style="width:6em"
+                   value="{{ rates.get(d.id, '') }}" placeholder="{{ default }}"> %</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endfor %}
+<section class="card"><p class="rowactions"><button class="btn accent">Save</button></p></section>
+{% endif %}
+</form>
+
+<script>
+(function () {
+  var box = document.getElementById('duty-filter');
+  if (!box) return;
+  box.addEventListener('input', function () {
+    var q = box.value.trim().toLowerCase();
+    document.querySelectorAll('.duty-row').forEach(function (row) {
+      row.style.display = !q || row.dataset.name.indexOf(q) >= 0 ? '' : 'none';
+    });
+  });
+})();
+</script>
+{% endblock %}
