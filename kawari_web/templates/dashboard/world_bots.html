@@ -1,0 +1,81 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}World bots · {{ branding.site_name }}{% endblock %}
+{% block content %}
+
+<form method="post" action="{{ url_for('dashboard.world_bots_save') }}">
+<input type="hidden" name="csrf" value="{{ csrf_token }}">
+
+<section class="card">
+  <h2>World bots</h2>
+  <p class="dim">Bots shown as other players: standing round the big aetherytes and the marketboards, walking between
+     a zone's places, through its exits, into inns and out, and teleporting between aetherytes, as players in your
+     retail captures did. They're only shown in zones someone is in. The settings are
+     <code>{{ path.name }}</code> in the server's data folder; the world server reads it again within a few seconds of
+     a change, without a restart.</p>
+  <p><label><input type="checkbox" name="enabled" {{ 'checked' if data.enabled }}> World bots on</label></p>
+  <p><label><input type="checkbox" name="travel" {{ 'checked' if data.travel }}> They travel (walk between places,
+     use exits and inns, teleport); off, they stay by their place</label></p>
+  <p><label>At every other big aetheryte
+     <input type="number" name="per_aetheryte" min="0" max="20" value="{{ data.per_aetheryte }}" style="width:5em"></label></p>
+  <p><label>At each marketboard, between
+     <input type="number" name="market_low" min="0" max="50" value="{{ data.per_marketboard[0] }}" style="width:5em"></label>
+     <label>and <input type="number" name="market_high" min="0" max="50" value="{{ data.per_marketboard[1] }}" style="width:5em"></label></p>
+  {% if modified %}<p class="dim small">Last saved {{ modified }}.</p>{% endif %}
+  <p class="dim small mono">{{ path }}</p>
+  <p class="rowactions"><button class="btn accent">Save</button></p>
+</section>
+
+<section class="card">
+  <h2>Cities</h2>
+  <p class="dim">How many gather round a town's big aetheryte, more than at every other one. Blank takes the
+     "every other big aetheryte" number.</p>
+  {% if towns %}
+  <p><input type="search" id="town-filter" placeholder="Filter by name" style="width:100%"></p>
+  <div class="table-wrap">
+  <table class="grid small">
+    <thead><tr><th>Town</th><th>Region</th><th>Territory</th><th>Bots</th></tr></thead>
+    <tbody>
+    {% for town in towns %}
+      <tr class="town-row" data-name="{{ (town.name ~ ' ' ~ town.region) | lower }}">
+        <td>{{ town.name }}</td><td>{{ town.region }}</td><td class="mono">{{ town.id }}</td>
+        <td><input type="number" name="city-{{ town.id }}" min="0" max="200" style="width:6em"
+                   value="{{ cities.get(town.id, '') }}" placeholder="{{ data.per_aetheryte }}"></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="line err">The towns haven't been read from the game yet: Content → Duties &amp; zones → build the content
+     index (a fork build from 2026-11-11 on), then come back. Until then they're listed by territory ID.</p>
+  {% endif %}
+  {% if others %}
+  <table class="grid small">
+    <thead><tr><th>Territory</th><th>Bots</th></tr></thead>
+    <tbody>
+    {% for territory in others %}
+      <tr><td class="mono">{{ territory }}</td>
+          <td><input type="number" name="city-{{ territory }}" min="0" max="200" style="width:6em" value="{{ cities[territory] }}"></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  <p><label>Add a territory by ID <input type="number" name="new_city" min="1" style="width:7em"></label>
+     <label>with <input type="number" name="new_count" min="0" max="200" style="width:5em"> bots</label></p>
+  <p class="rowactions"><button class="btn accent">Save</button></p>
+</section>
+</form>
+
+<script>
+(function () {
+  var box = document.getElementById('town-filter');
+  if (!box) return;
+  box.addEventListener('input', function () {
+    var q = box.value.trim().toLowerCase();
+    document.querySelectorAll('.town-row').forEach(function (row) {
+      row.style.display = !q || row.dataset.name.indexOf(q) >= 0 ? '' : 'none';
+    });
+  });
+})();
+</script>
+{% endblock %}

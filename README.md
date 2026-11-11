@@ -1,7 +1,7 @@
 # ArchonEngine ControlPanel
 
 A browser management/deployment front end for a self-hosted [ArchonEngine](https://github.com/FrameEnder/ArchonEngine)
-FFXIV server, built to run in a rootless Podman container. Version 2.27.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.28.0.
 
 How its features work, and how they depend on the ArchonEngine, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -130,7 +130,7 @@ the running image contains the current code. Since 2.1.3 the app also prints a
 banner before anything can fail:
 
 ```
-ArchonEngine ControlPanel 2.27.0 starting
+ArchonEngine ControlPanel 2.28.0 starting
   uid=1000 gid=1000
   data dir : /data
   data dir owner uid=1000 gid=1000, writable=True
@@ -239,7 +239,7 @@ keeps a quick form for it too.
 
 It has its own layout: a sidebar grouped by job — **Server** (Overview, Logs,
 Diagnostics, Battle replay), **Build & config** (Setup, Updates & branches, Server config), **Game
-data** (Database & accounts, Marketboard, Bot glamours, Drop rates), **Content** (Quest lab, Quest progress,
+data** (Database & accounts, Marketboard, Bot glamours, Drop rates, World bots), **Content** (Quest lab, Quest progress,
 Duties & zones) and **Community** (Shop, Announcements, Branding) — and a header with
 the page's group and title. Shop management and listing editing live in the dashboard
 too. On a phone the sidebar folds behind a **Menu** button, which is a checkbox, so it
@@ -499,6 +499,29 @@ The duties' names come from the game: build the content index first
 (**Content → Duties & zones**, which runs `kawari-questdump content`). The
 *Scripted* column says which duties the active build has a script for: only
 those have coffers.
+
+## World bots
+
+**Dashboard → World bots** (2.28.0) turns on the fork's players about the world:
+bots shown as other players, standing round the big aetherytes and the
+marketboards, walking between a zone's places, through its exits, into inns and
+out, and teleporting, as players did in your retail captures. They're only
+shown in zones someone is in. The page sets:
+
+* whether they're on, and whether they travel (off, they stay by their place);
+* how many stand at every big aetheryte, and how many at each marketboard (a
+  range, drawn for each board);
+* each town's own number round its big aetheryte: 30 in Limsa Lominsa, 10 in
+  Ul'dah and 20 in Gridania to start with.
+
+It writes `world-bots.json` in the server's data folder (beside `world.db`); the
+world server reads it again within a few seconds, without a restart. The towns'
+names come from the game: build the content index (**Content → Duties &
+zones**, which runs `kawari-questdump content`; a fork build from 2026-11-11 on
+lists the towns). Until then they're listed by territory ID.
+
+In game, `!worldbots` in Say tells you how many there are and where, and the
+nearest ones and what they're doing.
 
 ## Auracite backups
 
