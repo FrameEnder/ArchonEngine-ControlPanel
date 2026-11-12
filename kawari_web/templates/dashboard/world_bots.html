@@ -26,6 +26,18 @@
 </section>
 
 <section class="card">
+  <h2>Chat</h2>
+  <p class="dim">Lines the bots say (heard nearby) and shout (heard across the zone) now and then, one a line, picked
+     at random. As often as players chatted in your retail captures: a bot says something about once in twelve hours
+     in a city, once in two and a half outside; shouts a little more often. Their words are yours: none are kept from
+     the captures. Empty, they say nothing. Changing them keeps the bots where they are.</p>
+  {% set chat = data.chat or {} %}
+  <p><label>Say<br><textarea name="chat_say" rows="6" style="width:100%">{{ (chat.say or []) | join('\n') }}</textarea></label></p>
+  <p><label>Shout<br><textarea name="chat_shout" rows="4" style="width:100%">{{ (chat.shout or []) | join('\n') }}</textarea></label></p>
+  <p class="rowactions"><button class="btn accent">Save</button></p>
+</section>
+
+<section class="card">
   <h2>Cities</h2>
   <p class="dim">How many gather round a town's big aetheryte, more than at every other one. Blank takes the
      "every other big aetheryte" number.</p>

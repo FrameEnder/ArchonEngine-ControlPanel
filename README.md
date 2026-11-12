@@ -1,7 +1,7 @@
 # ArchonEngine ControlPanel
 
 A browser management/deployment front end for a self-hosted [ArchonEngine](https://github.com/FrameEnder/ArchonEngine)
-FFXIV server, built to run in a rootless Podman container. Version 2.28.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.29.0.
 
 How its features work, and how they depend on the ArchonEngine, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -130,7 +130,7 @@ the running image contains the current code. Since 2.1.3 the app also prints a
 banner before anything can fail:
 
 ```
-ArchonEngine ControlPanel 2.28.0 starting
+ArchonEngine ControlPanel 2.29.0 starting
   uid=1000 gid=1000
   data dir : /data
   data dir owner uid=1000 gid=1000, writable=True
@@ -512,7 +512,11 @@ shown in zones someone is in. The page sets:
 * how many stand at every big aetheryte, and how many at each marketboard (a
   range, drawn for each board);
 * each town's own number round its big aetheryte: 30 in Limsa Lominsa, 10 in
-  Ul'dah and 20 in Gridania to start with.
+  Ul'dah and 20 in Gridania to start with;
+* **Chat** (2.29.0): lines of your own the bots say and shout now and then, one
+  a line, as often as players chatted in your captures (none are kept from the
+  captures, so it's empty to start with). Changing them keeps the bots where
+  they are.
 
 It writes `world-bots.json` in the server's data folder (beside `world.db`); the
 world server reads it again within a few seconds, without a restart. The towns'

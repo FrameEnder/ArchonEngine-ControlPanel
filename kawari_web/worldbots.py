@@ -4,10 +4,12 @@ The world server reads world-bots.json from its data folder (the folder mounted 
 whenever it changes, so a change applies within seconds, without a restart:
 
     {"format": 1, "enabled": true, "cities": {"129": 30, "130": 10, "132": 20}, "per_aetheryte": 1,
-     "per_marketboard": [5, 10], "travel": true}
+     "per_marketboard": [5, 10], "travel": true, "chat": {"say": ["..."], "shout": ["..."]}}
 
 ``cities`` is by TerritoryType: how many bots gather round that town's big aetheryte; every other big aetheryte in a
-town or the open world gets ``per_aetheryte``. Each marketboard gets between the two ``per_marketboard`` numbers. The
+town or the open world gets ``per_aetheryte``. Each marketboard gets between the two ``per_marketboard`` numbers.
+``chat`` is the owner's own lines the bots say and shout now and then (none by default; changing them keeps the bots
+where they are). The
 towns' names come from content-index.json (kawari-questdump content, its "towns"), so no game text is kept here.
 """
 
@@ -29,8 +31,14 @@ from .admin_base import dashboard, settings
 SETTINGS_FILE = "world-bots.json"
 # The server's defaults (servers/world/src/server/world_bots.rs, Settings::default): Bob's numbers of 2026-11-11.
 DEFAULTS = {"enabled": False, "cities": {"129": 30, "130": 10, "132": 20}, "per_aetheryte": 1,
-            "per_marketboard": [5, 10], "travel": True}
-LIMITS = {"city": 200, "per_aetheryte": 20, "per_marketboard": 50}
+            "per_marketboard": [5, 10], "travel": True, "chat": {"say": [], "shout": []}}
+LIMITS = {"city": 200, "per_aetheryte": 20, "per_marketboard": 50, "chat_lines": 200, "chat_length": 400}
+
+
+def chat_lines(text: str | None) -> list[str]:
+    """One line a message, blank lines left out, at most the server's 200 of 400 characters."""
+    lines = [line.strip()[:LIMITS["chat_length"]] for line in (text or "").splitlines()]
+    return [line for line in lines if line][:LIMITS["chat_lines"]]
 
 
 def settings_path() -> Path:
@@ -133,10 +141,12 @@ def world_bots_save():
         "per_aetheryte": DEFAULTS["per_aetheryte"] if per_aetheryte is None else per_aetheryte,
         "per_marketboard": [min(low, high), max(low, high)],
         "travel": form.get("travel") == "on",
+        "chat": {"say": chat_lines(form.get("chat_say")), "shout": chat_lines(form.get("chat_shout"))},
     }
     write_settings(data)
     total = sum(cities.values())
     flash(f"Saved: world bots {'on' if data['enabled'] else 'off'}, {total} round {len(cities)} cities' aetherytes, "
           f"{data['per_aetheryte']} at every other, {data['per_marketboard'][0]}-{data['per_marketboard'][1]} per "
-          "marketboard. The server reads it within a few seconds.", "ok")
+          f"marketboard, {len(data['chat']['say'])} lines to say and {len(data['chat']['shout'])} to shout. The "
+          "server reads it within a few seconds.", "ok")
     return redirect(url_for("dashboard.world_bots"))
