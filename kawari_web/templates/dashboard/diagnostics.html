@@ -77,6 +77,13 @@
   </section>
 
   <section class="card">
+    <h2>Harness</h2>
+    <p class="dim">The server's state as JSON, read-only, for debugging it live from a browser signed in here: the
+      log (filtered), the lines that say something went wrong, the captures, a character's quest state.
+      <a href="{{ url_for('dashboard.harness_index') }}">/dashboard/harness</a> lists the pages.</p>
+  </section>
+
+  <section class="card">
     <h2>Packet capture</h2>
     <dl class="kv">
       <dt>Capture</dt><dd>{% if capture.enabled %}<span class="line ok">on</span>{% else %}off{% endif %}
