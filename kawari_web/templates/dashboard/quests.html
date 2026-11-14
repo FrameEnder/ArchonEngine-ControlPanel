@@ -165,4 +165,36 @@
   </form>
 </section>
 {% endif %}
+
+<section class="card">
+  <h2>Stored data</h2>
+  <p class="dim">What Quest Lab has extracted from the game, kept in its folder until cleared. Clearing deletes only
+     these files, not the game install or the server's scripts; each is made again by the commands above.</p>
+  <table class="grid">
+    <tr><th>What</th><th>Files</th><th>Size</th><th>Used by</th><th></th></tr>
+    {% for d in stored %}
+    <tr>
+      <td>{{ d.label }}</td>
+      <td>{{ d.files }}</td>
+      <td>{{ (d.bytes / 1048576) | round(1) }} MiB</td>
+      <td class="small dim">{{ d.used_by }}</td>
+      <td>
+        <form method="post" action="{{ url_for('dashboard.quests_clear') }}" class="inline"
+          onsubmit="return confirm('Clear {{ d.label | lower }}?{% if d.key in ('quest-index', 'item-index') %} {{ d.used_by | capitalize }} need it until it is built again.{% endif %}')">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}">
+          <input type="hidden" name="what" value="{{ d.key }}">
+          <button class="btn small" {{ 'disabled' if busy or not d.files }}>Clear</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  <form method="post" action="{{ url_for('dashboard.quests_clear') }}" class="rowactions"
+    onsubmit="return confirm('Clear everything Quest Lab has extracted? The quest and item indexes go too: Progress, the Marketboard and the Shop need them until they are built again.')">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="what" value="all">
+    <button class="btn danger" {{ 'disabled' if busy or not (stored | sum(attribute='files')) }}>Clear all extracted data</button>
+    <span class="dim small">{{ ((stored | sum(attribute='bytes')) / 1048576) | round(1) }} MiB in all</span>
+  </form>
+</section>
 {% endblock %}

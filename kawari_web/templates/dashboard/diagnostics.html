@@ -37,10 +37,42 @@
           <p class="dim">No characters in world.db.</p>
         {% endfor %}
       </fieldset>
-      <button class="btn accent" {{ 'disabled' if not repo or not has_token }}>Send diagnostics</button>
+      <div class="rowactions">
+        <button class="btn accent" {{ 'disabled' if not repo or not has_token }}>Send diagnostics</button>
+        <button class="btn" formaction="{{ url_for('dashboard.diagnostics_download') }}">Download bundle</button>
+      </div>
+      <p class="hint">Download builds the same bundle as a zip, without the repository: to look through by hand, or
+         to give someone helping with a bug. It holds the chosen characters' names and saved state, the server log
+         and what the packet captures recorded (chat included), so share it only with people you trust.</p>
     </form>
     {% if last_sent %}
       <p class="dim small">Last sent {{ last_sent }}{% if last_url %} · <a href="{{ last_url }}">commit</a>{% endif %}</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Bundles</h2>
+    <p class="dim">Every bundle built here, sent or downloaded, kept as a zip (the newest 20).</p>
+    {% if bundles %}
+    <table class="grid">
+      <tr><th>Bundle</th><th>Built</th><th>Size</th><th></th></tr>
+      {% for b in bundles %}
+      <tr>
+        <td class="mono small"><a href="{{ url_for('dashboard.diagnostics_bundle', name=b.name) }}">{{ b.name }}</a></td>
+        <td class="small">{{ b.when }}</td>
+        <td class="small">{{ (b.bytes / 1048576) | round(1) }} MiB</td>
+        <td>
+          <form method="post" action="{{ url_for('dashboard.diagnostics_bundle_delete', name=b.name) }}" class="inline"
+            onsubmit="return confirm('Delete {{ b.name }}?')">
+            <input type="hidden" name="csrf" value="{{ csrf_token }}">
+            <button class="btn small danger">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+      <p class="dim small">None yet: Send or Download one above.</p>
     {% endif %}
   </section>
 

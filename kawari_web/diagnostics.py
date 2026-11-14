@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import base64
 import gzip
+import io
 import json
 import re
 import sqlite3
@@ -37,10 +38,11 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import zipfile
 from pathlib import Path
 
 from flask import (
-    current_app, flash, g, jsonify, redirect, render_template, request, url_for,
+    abort, current_app, flash, g, jsonify, redirect, render_template, request, send_file, url_for,
 )
 
 from kawari_core import dbtools
@@ -56,6 +58,9 @@ CONTAINER_CAPTURE_DIR = "/kawari/data/captures"
 CONTAINER_NAVMESH_DIR = "/kawari/data/navimesh"
 
 MAX_SNAPSHOT_BYTES = 2 * 1024 * 1024
+# Bundles kept here as zips (sent or downloaded), newest first; the older ones are deleted.
+KEEP_BUNDLES = 20
+BUNDLE_ZIP = re.compile(r"^\d{8}-\d{6}[a-z0-9-]*\.zip$")
 # A battle file is gzipped JSON with every packet in it; a long dungeon can be tens of MB. The app's 8 MB request limit
 # is for forms, so the battle route reads its body itself, up to this.
 MAX_BATTLE_BYTES = 64 * 1024 * 1024
@@ -79,6 +84,13 @@ def _diag_dir() -> Path:
 
 def _snapshot_dir() -> Path:
     path = _diag_dir() / "snapshots"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _bundle_dir() -> Path:
+    """The bundles built here, as zips: to download again or hand to someone without the repository."""
+    path = _diag_dir() / "bundles"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -642,6 +654,53 @@ def _readme(meta: dict, characters: list, captures: list, snapshots: list) -> st
 # ════════════════════════════════════════════════════════════════════════════
 #  Page
 # ════════════════════════════════════════════════════════════════════════════
+def bundle_zip(folder: str, files: dict) -> bytes:
+    """A bundle as one zip, its files under the bundle's own folder name (`20261114-024122-note/README.md`), as the
+    repository has them; `latest.txt` is the repository's and stays out."""
+    name = folder.rsplit("/", 1)[-1]
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for path, data in files.items():
+            if not path.startswith(folder + "/"):
+                continue
+            # Captures are gzipped already: stored, not squeezed twice.
+            kind = zipfile.ZIP_STORED if path.endswith(".gz") else zipfile.ZIP_DEFLATED
+            archive.writestr(f"{name}/{path[len(folder) + 1:]}", data, compress_type=kind)
+    return buffer.getvalue()
+
+
+def keep_bundle(folder: str, files: dict) -> Path:
+    """Keeps a built bundle as a zip in the bundles folder, and deletes all but the newest KEEP_BUNDLES."""
+    target = _bundle_dir() / (folder.rsplit("/", 1)[-1] + ".zip")
+    target.write_bytes(bundle_zip(folder, files))
+    for old in kept_bundles()[KEEP_BUNDLES:]:
+        (_bundle_dir() / old["name"]).unlink(missing_ok=True)
+    return target
+
+
+def kept_bundles() -> list[dict]:
+    """The kept bundles, newest first: name, size, when."""
+    out = []
+    for path in _bundle_dir().glob("*.zip"):
+        if BUNDLE_ZIP.match(path.name):
+            stat = path.stat()
+            out.append({"name": path.name, "bytes": stat.st_size,
+                        "when": time.strftime("%Y-%m-%d %H:%M", time.localtime(stat.st_mtime)), "mtime": stat.st_mtime})
+    out.sort(key=lambda b: b["name"], reverse=True)
+    return out
+
+
+def _bundle_form() -> tuple[str, int, list[int]]:
+    note = (request.form.get("note") or "").strip()[:2000]
+    try:
+        minutes = max(5, min(24 * 60, int(request.form.get("minutes", "60"))))
+    except ValueError:
+        minutes = 60
+    content_ids = [int(x) for x in request.form.getlist("characters") if x.isdigit()]
+    _set("characters", ",".join(str(c) for c in content_ids))
+    return note, minutes, content_ids
+
+
 @dashboard.route("/diagnostics")
 @auth.admin_required
 def diagnostics():
@@ -663,7 +722,7 @@ def diagnostics():
         last_sent=_get("last_sent"), last_url=_get("last_url"),
         snapshots=[p.name for p in snapshots], latest=latest,
         default_ids=[int(x) for x in _get("characters").split(",") if x.isdigit()],
-        quest_test=_quest_test(),
+        quest_test=_quest_test(), bundles=kept_bundles(),
     )
 
 
@@ -760,17 +819,12 @@ def diagnostics_repo():
 @dashboard.route("/diagnostics/send", methods=["POST"])
 @auth.admin_required
 def diagnostics_send():
-    note = (request.form.get("note") or "").strip()[:2000]
-    try:
-        minutes = max(5, min(24 * 60, int(request.form.get("minutes", "60"))))
-    except ValueError:
-        minutes = 60
-    content_ids = [int(x) for x in request.form.getlist("characters") if x.isdigit()]
-    _set("characters", ",".join(str(c) for c in content_ids))
+    note, minutes, content_ids = _bundle_form()
 
     try:
         github = _github()
         folder, files = build_bundle(note, content_ids, minutes)
+        keep_bundle(folder, files)
         size = sum(len(v) for v in files.values())
         url = github.commit_files(files, f"Diagnostics: {note[:60] or folder}")
     except GitHubError as exc:
@@ -784,6 +838,40 @@ def diagnostics_send():
                       f"({len(files)} files, {size // 1024} KiB)")
     _set("last_url", url)
     flash(f"Sent {folder} ({len(files)} files, {size // 1024} KiB).", "ok")
+    return redirect(url_for("dashboard.diagnostics"))
+
+
+@dashboard.route("/diagnostics/download", methods=["POST"])
+@auth.admin_required
+def diagnostics_download():
+    """The same bundle as Send makes, as a zip to download: for troubleshooting by hand, or someone without the
+    repository. Needs no repository or token. A copy is kept with the others."""
+    note, minutes, content_ids = _bundle_form()
+    try:
+        folder, files = build_bundle(note, content_ids, minutes)
+        target = keep_bundle(folder, files)
+    except Exception as exc:                            # noqa: BLE001
+        flash(f"Not built: {exc}", "err")
+        return redirect(url_for("dashboard.diagnostics"))
+    return send_file(target, mimetype="application/zip", as_attachment=True, download_name=target.name)
+
+
+@dashboard.route("/diagnostics/bundle/<name>")
+@auth.admin_required
+def diagnostics_bundle(name: str):
+    target = _bundle_dir() / name
+    if not BUNDLE_ZIP.match(name) or not target.is_file():
+        abort(404)
+    return send_file(target, mimetype="application/zip", as_attachment=True, download_name=name)
+
+
+@dashboard.route("/diagnostics/bundle/<name>/delete", methods=["POST"])
+@auth.admin_required
+def diagnostics_bundle_delete(name: str):
+    target = _bundle_dir() / name
+    if BUNDLE_ZIP.match(name) and target.is_file():
+        target.unlink()
+        flash(f"Deleted {name}.", "ok")
     return redirect(url_for("dashboard.diagnostics"))
 
 

@@ -257,7 +257,7 @@ def quests():
         index_time=(time.strftime("%Y-%m-%d %H:%M", time.localtime(index_file.stat().st_mtime))
                     if index_file.exists() else ""),
         query=query, results=Q.search(index, dumps, query) if query else [],
-        dumped_ids=dumped_ids, extracted=extracted, busy=runner().busy)
+        dumped_ids=dumped_ids, extracted=extracted, busy=runner().busy, stored=stored_data())
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -455,6 +455,80 @@ def quests_delete():
         for name in ("index.txt",):
             (root / name).unlink(missing_ok=True)
     flash(f"Deleted {removed} dumped quest(s).", "ok")
+    return redirect(url_for("dashboard.quests"))
+
+
+# What Quest Lab keeps under its folder, each clearable on its own (`/quests/clear`): (key, label, what uses it.)
+STORED = (
+    ("dumps", "Dumped quests", "the table below, bundles of quests"),
+    ("extracted", "Extracted and searched files", "Any game file and Scripts that mention"),
+    (CLIENT_SCRIPTS, "Client scripts", "Script Check"),
+    ("quest-index", "Quest index", "searching all quests, Progress, completing prerequisites"),
+    ("item-index", "Item index", "the Marketboard, the Shop and item names"),
+)
+
+
+def _size(path: Path) -> tuple[int, int]:
+    """(files, bytes) under a file or folder."""
+    if path.is_file():
+        return 1, path.stat().st_size
+    if not path.is_dir():
+        return 0, 0
+    files = [p for p in path.rglob("*") if p.is_file()]
+    return len(files), sum(p.stat().st_size for p in files)
+
+
+def _stored_paths(key: str) -> list[Path]:
+    root = _root()
+    if key == "dumps":
+        return [d.folder for d in Q.scan_dumps(root)] + [root / "index.txt"]
+    if key == "quest-index":
+        return [root / "quest-index.json"]
+    if key == "item-index":
+        return [root / "item-index.json"]
+    if key in ("extracted", CLIENT_SCRIPTS):
+        return [root / key]
+    return []
+
+
+def stored_data() -> list[dict]:
+    """Each kind of Quest Lab data: how many files, how much, and what needs it."""
+    out = []
+    for key, label, used_by in STORED:
+        files = size = 0
+        for path in _stored_paths(key):
+            f, b = _size(path)
+            files, size = files + f, size + b
+        out.append({"key": key, "label": label, "used_by": used_by, "files": files, "bytes": size})
+    return out
+
+
+@dashboard.route("/quests/clear", methods=["POST"])
+@auth.admin_required
+def quests_clear():
+    """Deletes one kind of Quest Lab data, or all of it (`what=all`). The game install and the server's own files
+    aren't touched; everything here is made again by the commands above."""
+    if runner().busy:
+        flash("A Quest Lab job is running: clear when it's done.", "err")
+        return redirect(url_for("dashboard.quests"))
+    what = request.form.get("what", "")
+    keys = [key for key, _, _ in STORED] if what == "all" else [what]
+    labels = {key: label for key, label, _ in STORED}
+    cleared, freed = [], 0
+    for key in keys:
+        if key not in labels:
+            continue
+        for path in _stored_paths(key):
+            freed += _size(path)[1]
+            if path.is_dir():
+                shutil.rmtree(path, ignore_errors=True)
+            else:
+                path.unlink(missing_ok=True)
+        cleared.append(labels[key].lower())
+    if not cleared:
+        flash("Nothing to clear.", "err")
+    else:
+        flash(f"Cleared {', '.join(cleared)} ({freed / 1048576:,.1f} MiB).", "ok")
     return redirect(url_for("dashboard.quests"))
 
 

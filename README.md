@@ -1,7 +1,7 @@
 # ArchonEngine ControlPanel
 
 A browser management/deployment front end for a self-hosted [ArchonEngine](https://github.com/FrameEnder/ArchonEngine)
-FFXIV server, built to run in a rootless Podman container. Version 2.29.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.30.0.
 
 How its features work, and how they depend on the ArchonEngine, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -130,7 +130,7 @@ the running image contains the current code. Since 2.1.3 the app also prints a
 banner before anything can fail:
 
 ```
-ArchonEngine ControlPanel 2.29.0 starting
+ArchonEngine ControlPanel 2.30.0 starting
   uid=1000 gid=1000
   data dir : /data
   data dir owner uid=1000 gid=1000, writable=True
@@ -293,6 +293,11 @@ test.
   numbers and the `SCENE_*` constants the Sapphire-derived scripts use; client
   scenes the script never names are listed. A `-- NOTE:` mentioning
   "unverified" marks the script **unverified**.
+* **Stored data** (2.30.0). What Quest Lab has extracted, at the foot of the page, each kind with its files and size
+  and a *Clear* button: the dumped quests, the extracted and searched files, the client scripts Script Check reads, the
+  quest index and the item index (Progress, the Marketboard and the Shop need those two until they're built again), or
+  *Clear all extracted data*. Only these files go, not the game install or the server's scripts; the commands above
+  make each again. Not while a Quest Lab job is running.
 * **Quest page.** Variables (the ones the script uses in bold), objectives,
   listeners and rewards; the fork script beside the client listing; the
   quests before and after; downloads of each dump file.
@@ -576,6 +581,13 @@ needs, and commits it as one bundle to a private GitHub repository:
   position, conditions). It posts to `POST /api/diag/snapshot` with the same
   token as character sync;
 * which build is running, and the server config with secrets removed.
+
+**Downloading a bundle** (2.30.0). *Download bundle*, beside *Send diagnostics*, builds the same bundle as a zip
+(its files under the bundle's own folder name, as the repository has them) without needing the repository or a token:
+to look through by hand, or to give someone else helping with a bug. It holds the chosen characters' names and saved
+state, the server log and what the captures recorded, chat included, so share it only with people you trust. Every
+bundle built here, sent or downloaded, is kept in `<web>/diag/bundles` (the newest 20) and listed under **Bundles**, to
+download again or delete.
 
 **Battles from Kawari Recorder.** The Recorder (2.6+) can send each retail battle it records straight here:
 in its Battles tab, under *Send to ArchonEngine ControlPanel*, enter this site's address and your character sync token
