@@ -25,11 +25,13 @@
   <h2>1. Game files</h2>
   <p class="dim">The folder containing <code>sqpack/</code> and
      <code>ffxiv_dx11.exe</code> on the server machine. This is a host path: it is
-     bind-mounted into the game container, so it must be readable by the host.</p>
+     bind-mounted into the game container, so it must be readable by the host. On Windows, type it
+     as Windows shows it (<code>C:\Program Files (x86)\SquareEnix\FINAL FANTASY XIV - A Realm Reborn\game</code>):
+     it's handed to Podman's machine as <code>/mnt/c/…</code>.</p>
   <form method="post" action="{{ url_for('dashboard.set_game_path') }}">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
     <label>Game path <input name="game_path" value="{{ shell.game_path }}"
-           placeholder="/home/you/.local/share/astra/…/game"></label>
+           placeholder="C:\Program Files (x86)\SquareEnix\FINAL FANTASY XIV - A Realm Reborn\game"></label>
     <button class="btn">Save game path</button>
   </form>
   {% if containerised and not game_visible %}

@@ -4,11 +4,8 @@ A web app running in a container cannot shell out to `podman` - the binary and
 the rootless state live on the host. So this talks to Podman's REST API over a
 mounted unix socket, and falls back to the CLI when running directly on the host.
 
-Enable the socket once on the host:
-
-    systemctl --user enable --now podman.socket
-
-then mount it into the container and point PODMAN_SOCKET at it. Without either
+On Windows (this branch) the socket is the Podman machine's, inside its VM; run.ps1 finds it with
+`podman info` and mounts it into the container, pointing PODMAN_SOCKET at it. Without either
 route the app still works; only the container controls are disabled, which the
 UI states rather than failing silently.
 """
@@ -22,6 +19,8 @@ import socket
 import subprocess
 from dataclasses import dataclass
 
+from .winpaths import machine_path
+
 
 class UnixHTTPConnection(http.client.HTTPConnection):
     """http.client over a unix domain socket."""
@@ -31,6 +30,10 @@ class UnixHTTPConnection(http.client.HTTPConnection):
         self.socket_path = socket_path
 
     def connect(self):
+        if not hasattr(socket, "AF_UNIX"):
+            # Python on Windows itself: the API socket is the machine's, reachable from a container in it (run.ps1).
+            raise OSError("the Podman API socket is reachable only from a container in Podman's machine: "
+                          "start ArchonEngine ControlPanel with run.ps1")
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.settimeout(self.timeout)
         sock.connect(self.socket_path)
@@ -70,12 +73,11 @@ class Podman:
                 return True, f"podman {version} (API socket)"
             error = res.error or "socket did not answer"
             if "Permission denied" in error or "Errno 13" in error:
-                error += (". The socket is mounted but access is denied. On an SELinux "
-                          "system (Bazzite, Fedora) a confined container cannot write to "
-                          "it: run this container with --security-opt label=disable, "
-                          "which run.sh now does automatically. If SELinux is not the "
-                          "cause, check that the socket's owner uid matches yours inside "
-                          "the container - that needs --userns=keep-id.")
+                error += (". The socket is mounted but access is denied. Check that the "
+                          "socket's owner uid matches yours inside the container: on a "
+                          "rootless Podman machine that needs --userns=keep-id, which "
+                          "run.ps1 adds (a rootful machine's socket is root's: run.ps1 "
+                          "mounts /run/podman/podman.sock then). diagnose.ps1 shows both.")
             return False, error
         if mode == "cli":
             try:
@@ -354,8 +356,10 @@ def container_spec(name: str, image: str, mounts: list, ports: list,
              "protocol": "tcp"}
             for host_ip, port in ports
         ],
+        # Sources as Podman's machine sees them (Windows branch): a Windows path from settings.conf or Setup becomes
+        # /mnt/<drive>/..., which the API needs and the CLI would have done by itself (`winpaths.py`).
         "mounts": [
-            {"destination": dest, "source": source, "type": "bind",
+            {"destination": dest, "source": machine_path(source), "type": "bind",
              "options": ["rbind", *opts]}
             for source, dest, opts in mounts
         ],

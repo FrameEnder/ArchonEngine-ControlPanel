@@ -14,10 +14,10 @@
 <div class="card warn">
   <h2>No Podman access</h2>
   <p>{{ podman_version }}</p>
-  <p class="dim">Start and stop controls and logs need the rootless Podman API socket.
-     On the host: <code class="mono">systemctl --user enable --now podman.socket</code>,
-     then mount <code class="mono">/run/user/$(id -u)/podman/podman.sock</code> into this
-     container and set <code class="mono">PODMAN_SOCKET</code> to the mounted path.
+  <p class="dim">Start and stop controls and logs need the Podman machine's API socket mounted into this
+     container. Start ArchonEngine ControlPanel with <code class="mono">.\run.ps1</code> in PowerShell: it starts the
+     Podman machine, finds the socket (<code class="mono">podman info</code>'s RemoteSocket) and mounts it, setting
+     <code class="mono">PODMAN_SOCKET</code>. <code class="mono">.\diagnose.ps1</code> shows what's missing.
      Everything else on this page works without it.</p>
 </div>
 {% endif %}

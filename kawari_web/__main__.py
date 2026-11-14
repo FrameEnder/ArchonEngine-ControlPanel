@@ -17,7 +17,7 @@ def main() -> int:
     # is actually running and which identity it has.
     sys.stderr.write(
         f"ArchonEngine ControlPanel {__version__} starting\n"
-        f"  uid={os.getuid()} gid={os.getgid()}\n"
+        f"  uid={getattr(os, 'getuid', lambda: '?')()} gid={getattr(os, 'getgid', lambda: '?')()}\n"
         f"  data dir : {settings.data_dir}\n"
         f"  web dir  : {settings.web_dir}\n"
         f"  host view: {settings.host_data_dir}\n"

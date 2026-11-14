@@ -1,32 +1,47 @@
 # ArchonEngine ControlPanel
 
 A browser management/deployment front end for a self-hosted [ArchonEngine](https://github.com/FrameEnder/ArchonEngine)
-FFXIV server, built to run in a rootless Podman container. Version 2.30.0.
+FFXIV server, built to run in a Podman container. Version 2.30.0.
+
+**This is the Windows branch.** It runs the same ControlPanel on Windows, still in Podman: Podman for Windows runs
+containers in a Linux VM (`podman machine`, on WSL2), and the ControlPanel, the game server, the source build and
+kawari-questdump all run in containers there, as on Linux. What differs is everything outside a container: PowerShell
+scripts (`run.ps1`, `install-service.ps1`, `diagnose.ps1`) in place of the bash ones and the systemd unit, Windows
+paths turned into the machine's (`C:\...` is `/mnt/c/...` there), and Windows Firewall. `main` is the Linux one; every
+change made there is made here too (`CLAUDE.md`).
 
 How its features work, and how they depend on the ArchonEngine, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
 
 ## Run it
 
-```bash
-cd ~/Documents/Server/FFXIV/kawari-web
-./run.sh
+You need [Podman for Windows](https://podman.io/docs/installation#windows) (or Podman Desktop), and once:
+
+```powershell
+podman machine init      # the Linux VM Podman runs containers in (WSL2); rootless is the default
 ```
 
-Then open `http://127.0.0.1:7301`, or use the server's LAN or
-Tailscale address if configured to do so, open the port in firewalld, or other firewall solutions if not already.
+Then, in PowerShell, from this folder:
 
-`run.sh` builds the image, mounts your
-`~/.kawari` directory, and mounts the rootless Podman API socket if it exists.
-
-To let the dashboard start and stop the game server, enable the socket once:
-
-```bash
-systemctl --user enable --now podman.socket
+```powershell
+.\run.ps1
 ```
 
-Without it the site still works; only the container controls and log view are
-disabled, and the dashboard says so rather than failing silently.
+If PowerShell refuses to run scripts, allow ones you've saved yourself first:
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+
+Then open `http://127.0.0.1:7301`, or this PC's LAN or Tailscale address once the port is allowed through Windows
+Firewall (`install-service.ps1 -Firewall`).
+
+`run.ps1` starts the Podman machine if it isn't running, builds the image, mounts your `%USERPROFILE%\.kawari` folder
+(`-DataDir` for another), and mounts the machine's Podman API socket, so the dashboard can build, start and stop the
+game server. It finds the socket with `podman info` (rootless: `/run/user/1000/podman/podman.sock` in the machine;
+rootful: `/run/podman/podman.sock`) and passes the data folder to the app as the machine sees it
+(`KAWARI_HOST_DATA_DIR=/mnt/c/Users/<you>/.kawari`), because the containers the app creates are mounted from machine
+paths.
+
+The data folder on a Windows drive is reached through WSL's drive sharing, which is slower than the machine's own
+disk; builds from source feel it most.
 
 ## Live character sync
 
@@ -49,54 +64,49 @@ this server does not control:
 
 ## Running it as a service
 
-`run.sh` is for trying things out: the container restarts if it crashes, but
-nothing starts it after a reboot. For a permanent install:
+`run.ps1` is for trying things out: Podman restarts the container if it crashes, but nothing starts Podman's machine
+after a reboot. For a permanent install:
 
-```bash
-./install-service.sh
+```powershell
+.\install-service.ps1             # after run.ps1 has made the container
+.\install-service.ps1 -Firewall   # also allow 7301 and the game server's ports (PowerShell as administrator)
+.\install-service.ps1 -Remove     # undo it
 ```
 
-That builds the image, enables linger (without which a rootless user service
-stops when you log out), writes a systemd unit with your paths, starts it and
-checks it answers. `Restart=always` is systemd's equivalent of
-`--restart unless-stopped`: it comes back whenever it exits, and
-`systemctl --user stop kawari-web` keeps it stopped until you start it again.
+Windows has no systemd or Quadlet, so it does their job in two parts: a scheduled task, *ArchonEngine ControlPanel*,
+starts the Podman machine (and this container) when you log on, and the machine's `podman-restart` service is enabled,
+so every container with a restart policy comes back when the machine starts: the ControlPanel's and the game server's,
+both `unless-stopped`. `podman stop kawari-web` keeps it stopped until you start it again.
 
-It uses a quadlet unit where podman supports it (4.4 and later) and a plain
-systemd unit otherwise. `kawari-web.container` is the quadlet it writes, if you
-would rather place it by hand.
-
-```bash
-systemctl --user status kawari-web      # how it is doing
-systemctl --user restart kawari-web
-systemctl --user stop kawari-web        # stays stopped
-journalctl --user -u kawari-web -f      # follow the log
-./install-service.sh --remove           # undo it
+```powershell
+podman ps                           # how it is doing
+podman restart kawari-web
+podman stop kawari-web              # stays stopped
+podman logs -f kawari-web           # follow the log
 ```
 
-The installer refuses to go ahead if the data directory is not writable or your
-user has no `/etc/subuid` entry, since both produce failures that look like
-something else later.
+The firewall rules are for private networks only: the ControlPanel's port and the ports game clients use, 21058 to
+21063 (Admin, 21057, stays on this PC unless you expose it on the Setup page).
 
 ### Configuration
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `KAWARI_DATA_DIR` | `~/.kawari` | Kawari config directory: databases, config.yaml, backups |
+| `KAWARI_DATA_DIR` | `/data` (in the container) | Kawari config directory: databases, config.yaml, backups (`%USERPROFILE%\.kawari` on Windows) |
 | `KAWARI_WEB_DIR` | `<data>/web` | Web app state: `webapp.db` and uploads |
 | `PODMAN_SOCKET` | *(unset)* | Path to the mounted Podman API socket |
-| `KAWARI_HOST_DATA_DIR` | same as data dir | The data directory **as the host sees it** |
+| `KAWARI_HOST_DATA_DIR` | same as data dir | The data directory **as Podman's machine sees it** (`/mnt/c/...`; a `C:\...` path is turned into that) |
 | `KAWARI_WEB_HOST` / `KAWARI_WEB_PORT` | `0.0.0.0` / `7301` | Bind address inside the container |
 
 The default is 7301 rather than 8080, which is taken on most machines running
 anything else. To use a different one:
 
-```bash
-PORT=9000 ./run.sh          # publishes 9000 on the host
+```powershell
+.\run.ps1 -Port 9000          # publishes 9000 on this PC
 ```
 
-`PORT` only changes the host side of the mapping. The app inside the container
-always listens on `KAWARI_WEB_PORT`, and `run.sh` maps `PORT` to it, so the two
+`-Port` only changes the host side of the mapping. The app inside the container
+always listens on `KAWARI_WEB_PORT`, and `run.ps1` maps `-Port` to it, so the two
 never have to agree. If you change the published port, remember the value shown
 on the How to Connect page is Kawari's own web port (21062), not this one — they
 are different services.
@@ -104,7 +114,7 @@ are different services.
 ## Moving the server to another machine
 
 `settings.conf` records absolute **host** paths (`DATA_DIR`, `GAME_PATH`) from
-wherever the server was first set up, so copying the data directory to a
+wherever the server was first set up (on Windows, either `C:\...` or the machine's `/mnt/c/...`: both are read), so copying the data directory to a
 different host leaves them pointing at nothing - a different username, or
 `/var/home` on an ostree system versus `/home` elsewhere, is enough.
 
@@ -120,13 +130,14 @@ game files moved too.
 
 ## If it will not start
 
-```bash
-./diagnose.sh
+```powershell
+.\diagnose.ps1
 ```
 
-That prints which image and container actually exist, when each was built, the
-user namespace mode in effect, what the container sees at `/data`, and whether
-the running image contains the current code. Since 2.1.3 the app also prints a
+That prints the Podman machine's state (rootless or rootful, and its API socket), which image and container actually
+exist and when each was built, the scheduled task, the user namespace mode in effect, what the container sees at
+`/data` and as `KAWARI_HOST_DATA_DIR`, whether it can talk to the API socket, whether the app answers from this PC and
+the LAN, and the Windows Firewall rule. Since 2.1.3 the app also prints a
 banner before anything can fail:
 
 ```
@@ -137,8 +148,7 @@ ArchonEngine ControlPanel 2.30.0 starting
 ```
 
 If the version in that banner is not the one you just built, an old container is
-still running - `run.sh` now stops a quadlet-managed unit first, and prints the
-image and container IDs after starting.
+still running - `run.ps1` removes the old one before starting, and prints the first log lines after.
 
 ## First run
 
@@ -787,8 +797,9 @@ forever by the restart policy.
 
 `--userns=keep-id` maps your host uid to the same uid inside the container, so
 the mounted data directory is writable and the Podman socket stays reachable.
-`run.sh` and the quadlet unit both set it. If you run the container by hand, you
-need it too.
+On Windows the "host" is Podman's machine, whose user is uid 1000 (the image is built for it); `run.ps1` sets
+keep-id on a rootless machine and leaves it out on a rootful one, which has no user namespace to keep. If you run the
+container by hand, do the same.
 
 ### Reaching the game server from inside the container
 
@@ -808,12 +819,13 @@ If the game server runs on a different machine from this web app, set
 
 ### Why `KAWARI_HOST_DATA_DIR` matters
 
-Podman runs on the host, so when this app asks it to create the Kawari container,
-the bind-mount paths in that request are resolved **by the host**. Inside this
-container the data directory is `/data`, which the host knows nothing about, so
-the app translates paths before building a container spec. `run.sh` and the
-quadlet unit set this automatically; set it yourself only if you mount things
-differently.
+Podman runs in its machine, so when this app asks it to create the Kawari container,
+the bind-mount paths in that request are resolved **by the machine**. Inside this
+container the data directory is `/data`, and on Windows it's `C:\Users\<you>\.kawari`, neither of which the machine
+knows: it has `/mnt/c/Users/<you>/.kawari`. So the app translates paths before building a container spec, and any
+Windows path in a mount (the game folder from Setup, `DATA_DIR` in settings.conf) becomes the machine's
+(`kawari_web/winpaths.py`). `run.ps1` sets `KAWARI_HOST_DATA_DIR` automatically; set it yourself only if you mount
+things differently.
 
 ## Starting the server
 
@@ -863,10 +875,12 @@ kawari_core/     shared, Qt-free: dbtools, chardata, auracite, schemagen,
                  battle_replay, gamedata, constants, core
 kawari_web/      Flask app: config, webdb, auth, podman_api, stats, app,
                  dashboard, upstreamcfg, srcbuild, questlab, progress, shop,
-                 marketboard, replay, templates/, static/ (style.css, app.js, fonts/)
-Containerfile    rootless-friendly image, runs as a non-root user
-run.sh           build + run with the right mounts
-kawari-web.container  systemd quadlet unit
+                 marketboard, replay, winpaths (Windows paths as Podman's machine
+                 sees them), templates/, static/ (style.css, app.js, fonts/)
+Containerfile    rootless-friendly image, runs as a non-root user (uid 1000, the machine's)
+run.ps1          start the Podman machine, build + run with the right mounts
+install-service.ps1  log-on scheduled task, podman-restart, Windows Firewall rules
+diagnose.ps1     what's running, what it can reach
 ```
 
 `kawari_core` is currently a copy of the desktop app's logic modules. Making the

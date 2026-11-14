@@ -29,6 +29,8 @@ from pathlib import Path
 
 from kawari_core import core as kcore
 
+from .winpaths import machine_path
+
 
 def _env_path(name: str, default: Path) -> Path:
     value = os.environ.get(name)
@@ -51,7 +53,8 @@ class Settings:
             data_dir=data_dir,
             web_dir=_env_path("KAWARI_WEB_DIR", data_dir / "web"),
             podman_socket=os.environ.get("PODMAN_SOCKET", ""),
-            host_data_dir=_env_path("KAWARI_HOST_DATA_DIR", data_dir),
+            # As Podman's machine sees it (Windows branch): run.ps1 passes /mnt/c/..., a C:\... given by hand works too.
+            host_data_dir=Path(machine_path(_env_path("KAWARI_HOST_DATA_DIR", data_dir))),
             host=os.environ.get("KAWARI_WEB_HOST", "0.0.0.0"),
             port=int(os.environ.get("KAWARI_WEB_PORT", "7301")),
         )
@@ -73,7 +76,7 @@ class Settings:
         """
         from pathlib import Path as _P
         out = []
-        configured = (self.shell.get("DATA_DIR", "") or "").strip()
+        configured = machine_path((self.shell.get("DATA_DIR", "") or "").strip())
         if configured:
             out.append(self.from_host(configured))     # host path -> our view
             out.append(_P(configured))                 # already local?
@@ -97,13 +100,13 @@ class Settings:
     @property
     def db_dir_configured(self) -> Path:
         """What settings.conf points at, translated into our view."""
-        configured = (self.shell.get("DATA_DIR", "") or "").strip()
+        configured = machine_path((self.shell.get("DATA_DIR", "") or "").strip())
         return self.from_host(configured) if configured else Path(self.data_dir) / "data"
 
     @property
     def db_path_mismatch(self) -> str:
         """Empty when settings.conf is right; otherwise an explanation."""
-        configured = (self.shell.get("DATA_DIR", "") or "").strip()
+        configured = machine_path((self.shell.get("DATA_DIR", "") or "").strip())
         if not configured:
             return ""
         translated = self.db_dir_configured
@@ -233,10 +236,10 @@ class Settings:
         except PermissionError as exc:
             import os
             raise PermissionError(
-                f"Cannot write to {self.web_dir} (running as uid {os.getuid()}).\n\n"
+                f"Cannot write to {self.web_dir} (running as uid {getattr(os, 'getuid', lambda: '?')()}).\n\n"
                 f"In rootless Podman, container uid 0 maps to your host user and other "
                 f"uids map to subuids, so a mounted directory you own looks root-owned "
                 f"inside the container.\n"
-                f"Run the container with --userns=keep-id (run.sh and the quadlet unit "
-                f"do this), or check that {self.data_dir} is writable on the host."
+                f"Run the container with --userns=keep-id (run.ps1 does this on a rootless "
+                f"Podman machine), or check that {self.data_dir} is writable on the host."
             ) from exc
