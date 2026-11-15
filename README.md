@@ -1,7 +1,7 @@
 # ArchonEngine ControlPanel
 
 A browser management/deployment front end for a self-hosted [ArchonEngine](https://github.com/FrameEnder/ArchonEngine)
-FFXIV server, built to run in a Podman container. Version 2.33.1.
+FFXIV server, built to run in a Podman container. Version 2.33.2.
 
 **This is the Windows branch.** It runs the same ControlPanel on Windows, still in Podman: Podman for Windows runs
 containers in a Linux VM (`podman machine`, on WSL2), and the ControlPanel, the game server, the source build and
@@ -141,7 +141,7 @@ the LAN, and the Windows Firewall rule. Since 2.1.3 the app also prints a
 banner before anything can fail:
 
 ```
-ArchonEngine ControlPanel 2.33.1 starting
+ArchonEngine ControlPanel 2.33.2 starting
   uid=1000 gid=1000
   data dir : /data
   data dir owner uid=1000 gid=1000, writable=True
@@ -559,8 +559,10 @@ events where a build keeps it (`resources/events/`, from 2026-11-15; 2.33.0
 looked in `resources/data`, which a build's files leave out, and listed
 nothing); an older build lists nothing and the page says so.
 
-Each event has three choices: **Off**, **On** (until you turn it off), or
-**Scheduled**, with a start and an end. The times are UTC, and the page says
+The page is a list to pick from (2.33.2): **tick the events you want**, one row
+each, and an event the fork builds later is another row. Beside a ticked event,
+**Runs** says whether it's on *until you untick it* or *between dates*, with a
+start and an end. The times are UTC, and the page says
 what time it is in UTC now. A schedule without a start is on until its end;
 without an end, from its start for good. Beside each event the page says what
 it's doing now, when retail ran it, and which quests and duties it brings; *Use

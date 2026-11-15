@@ -3,12 +3,16 @@
 {% block content %}
 
 <style>
-  .event-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-  .event-head h3 { margin: 0; }
-  .event-modes { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 12px 0 4px; }
-  .event-times { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: end; margin: 8px 0; }
-  .event-times input { min-width: 14em; }
-  .event-facts { margin: 8px 0 0; }
+  table.eventlist td { vertical-align: top; }
+  table.eventlist td.pick, table.eventlist td.now { width: 1%; white-space: nowrap; }
+  table.eventlist td.pick input { width: 18px; height: 18px; margin-top: 2px; }
+  table.eventlist label.name { font-weight: 600; cursor: pointer; }
+  table.eventlist .facts { margin: 4px 0 0; }
+  table.eventlist .when { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; }
+  table.eventlist .when input[type=datetime-local] { min-width: 13em; }
+  table.eventlist tr.unpicked .when { opacity: .45; }
+  table.eventlist .dates[hidden] { display: none; }
+  table.eventlist .dates { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; }
 </style>
 
 <form method="post" action="{{ url_for('dashboard.events_save') }}">
@@ -16,14 +20,13 @@
 
 <section class="card">
   <h2>Events</h2>
-  <p class="dim">The seasonal and special events this server has built. Turn one <strong>on</strong> and it runs until
-     you turn it off; <strong>schedule</strong> it and it starts and ends by itself. While an event is on its NPCs and
-     decorations are out, and its quests and duties can be played.</p>
+  <p class="dim">The seasonal and special events this server has built. <strong>Tick the ones you want</strong>:
+     each is chosen by itself, and runs until you untick it or for the dates you give it. While an event is on its
+     NPCs and decorations are out, and its quests and duties can be played.</p>
   <p class="dim small">Times are UTC (it's {{ now }} UTC now). A schedule without a start is on until its end; without
      an end, from its start for good. Saved as <span class="mono">{{ path }}</span>; the world server reads it again
      whenever it changes and watches the schedule itself, so there's no restart. Players already online see an event's
      NPCs after their next zone change.{% if modified %} Last saved {{ modified }}.{% endif %}</p>
-  <p class="rowactions"><button class="btn accent">Save</button></p>
 </section>
 
 {% if not rows %}
@@ -32,41 +35,53 @@
      <span class="mono">test-pending</span> (the list moved to where a build keeps it on 2026-11-15, after
      <span class="mono">f9e4b0f</span>).{% else %}No build is active yet. Install one from Setup.{% endif %}</p>
 </section>
-{% endif %}
-
-{% for event in rows %}
+{% else %}
 <section class="card">
-  <div class="event-head">
-    <h3>{{ event.name }}</h3>
-    <span class="pill small {{ 'ok' if event.state == 'on' else ('warn' if event.state == 'waiting' else '') }}">{{ event.sentence }}</span>
+  <h3>{{ rows|length }} event{{ 's' if rows|length != 1 }} built{% if picked %}, {{ picked }} chosen{% endif %}</h3>
+  <div class="table-wrap">
+  <table class="grid eventlist">
+    <thead><tr><th></th><th>Event</th><th>Now</th><th>When</th></tr></thead>
+    <tbody>
+    {% for event in rows %}
+    <tr data-row="{{ event.key }}" class="{{ '' if event.mode != 'off' else 'unpicked' }}">
+      <td class="pick"><input type="checkbox" id="pick-{{ event.key }}" name="pick|{{ event.key }}" value="1"
+            data-pick="{{ event.key }}" {{ 'checked' if event.mode != 'off' }}></td>
+      <td>
+        <label class="name" for="pick-{{ event.key }}">{{ event.name }}</label>
+        <p class="dim small facts">
+          {% if event.quest_names %}Quests: {% for id, name in event.quest_names %}{{ name }}{{ ', ' if not loop.last }}{% endfor %}.{% endif %}
+          {% if event.duty_names %}Duties: {% for id, name in event.duty_names %}{{ name }}{{ ', ' if not loop.last }}{% endfor %}.{% endif %}
+          Festival {{ event.festival }}{% if event.phase %}, phase {{ event.phase }}{% endif %}.
+          {% if event.retail[0] %}Retail ran it from {{ event.retail[0] }} UTC{% if event.retail[1] %} to
+            {{ event.retail[1] }} UTC{% else %} (no end yet){% endif %}.{% endif %}
+        </p>
+      </td>
+      <td class="now"><span class="pill small {{ 'ok' if event.state == 'on' else ('warn' if event.state == 'waiting' else '') }}">{{ event.sentence }}</span></td>
+      <td>
+        <div class="when">
+          <label>Runs<br>
+            <select name="when|{{ event.key }}" data-when="{{ event.key }}">
+              <option value="always" {{ 'selected' if event.mode != 'scheduled' }}>Until I untick it</option>
+              <option value="scheduled" {{ 'selected' if event.mode == 'scheduled' }}>Between dates</option>
+            </select></label>
+          <div class="dates" data-dates="{{ event.key }}" {{ 'hidden' if event.mode != 'scheduled' }}>
+            <label>Starts (UTC)<br><input type="datetime-local" name="start|{{ event.key }}"
+               value="{{ event.start }}"></label>
+            <label>Ends (UTC)<br><input type="datetime-local" name="end|{{ event.key }}"
+               value="{{ event.end }}"></label>
+            {% if event.retail[0] %}
+            <button type="button" class="btn small" data-retail="{{ event.key }}"
+               data-start="{{ event.retail_form[0] }}" data-end="{{ event.retail_form[1] }}">Use retail's dates</button>
+            {% endif %}
+          </div>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
   </div>
-  <div class="event-modes">
-    <label><input type="radio" name="mode|{{ event.key }}" value="off" {{ 'checked' if event.mode == 'off' }}> Off</label>
-    <label><input type="radio" name="mode|{{ event.key }}" value="on" {{ 'checked' if event.mode == 'on' }}> On</label>
-    <label><input type="radio" name="mode|{{ event.key }}" value="scheduled" {{ 'checked' if event.mode == 'scheduled' }}> Scheduled</label>
-  </div>
-  <div class="event-times">
-    <label>Starts (UTC)<br><input type="datetime-local" name="start|{{ event.key }}" value="{{ event.start }}"
-       data-event="{{ event.key }}"></label>
-    <label>Ends (UTC)<br><input type="datetime-local" name="end|{{ event.key }}" value="{{ event.end }}"
-       data-event="{{ event.key }}"></label>
-    {% if event.retail[0] %}
-    <button type="button" class="btn small" data-retail="{{ event.key }}" data-start="{{ event.retail_form[0] }}"
-       data-end="{{ event.retail_form[1] }}">Use retail's dates</button>
-    {% endif %}
-  </div>
-  <p class="dim small event-facts">
-    {% if event.retail[0] %}Retail ran it from {{ event.retail[0] }} UTC{% if event.retail[1] %} to
-      {{ event.retail[1] }} UTC{% else %} (no end yet){% endif %}.{% endif %}
-    Festival {{ event.festival }}{% if event.phase %}, phase {{ event.phase }}{% endif %}.
-    {% if event.quest_names %}Quests: {% for id, name in event.quest_names %}{{ name }}{{ ', ' if not loop.last }}{% endfor %}.{% endif %}
-    {% if event.duty_names %}Duties: {% for id, name in event.duty_names %}{{ name }}{{ ', ' if not loop.last }}{% endfor %}.{% endif %}
-  </p>
-</section>
-{% endfor %}
-
-{% if rows %}
-<section class="card">
+  <p class="dim small">An event the fork builds later shows up here as another row, unticked.</p>
   <p class="rowactions"><button class="btn accent">Save</button></p>
 </section>
 {% endif %}
@@ -74,21 +89,27 @@
 
 <script>
 (function () {
-  // "Use retail's dates" fills the two boxes and picks Scheduled; typing a date picks Scheduled too.
-  function schedule(key) {
-    var radio = document.querySelector('input[type=radio][name="mode|' + key + '"][value=scheduled]');
-    if (radio) { radio.checked = true; }
-  }
+  // Ticking an event lights its row; "Between dates" shows the two boxes; "Use retail's dates" fills them.
+  function row(key) { return document.querySelector('tr[data-row="' + key + '"]'); }
+  document.querySelectorAll('input[data-pick]').forEach(function (box) {
+    box.addEventListener('change', function () {
+      row(box.dataset.pick).classList.toggle('unpicked', !box.checked);
+    });
+  });
+  document.querySelectorAll('select[data-when]').forEach(function (select) {
+    select.addEventListener('change', function () {
+      var key = select.dataset.when;
+      document.querySelector('[data-dates="' + key + '"]').hidden = select.value !== 'scheduled';
+      var box = document.querySelector('input[data-pick="' + key + '"]');
+      if (!box.checked) { box.checked = true; row(key).classList.remove('unpicked'); }
+    });
+  });
   document.querySelectorAll('button[data-retail]').forEach(function (button) {
     button.addEventListener('click', function () {
       var key = button.dataset.retail;
       document.querySelector('input[name="start|' + key + '"]').value = button.dataset.start;
       document.querySelector('input[name="end|' + key + '"]').value = button.dataset.end;
-      schedule(key);
     });
-  });
-  document.querySelectorAll('input[type=datetime-local][data-event]').forEach(function (input) {
-    input.addEventListener('change', function () { if (input.value) { schedule(input.dataset.event); } });
   });
 })();
 </script>
