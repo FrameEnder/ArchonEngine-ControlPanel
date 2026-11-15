@@ -2,69 +2,252 @@
 {% block title %}Drop rates · {{ branding.site_name }}{% endblock %}
 {% block content %}
 
-<form method="post" action="{{ url_for('dashboard.drop_rates_save') }}">
+{% macro cell(c) -%}
+<td class="rate"><input type="number" name="{{ c.name }}" min="0" max="{{ c.most }}" step="1" value="{{ c.value }}"
+     placeholder="{{ c.inherited }}" class="rate-input"></td>
+{%- endmacro %}
+{% macro head(columns, first) -%}
+<thead><tr>{% for h, kind in first %}<th{% if kind %} class="{{ kind }}"{% endif %}>{{ h }}</th>{% endfor %}
+  {% for column in columns %}<th class="rate" title="{{ column.title }}">{{ column.label }}</th>{% endfor %}</tr></thead>
+{%- endmacro %}
+
+<style>
+  table.ratetable th.rate, table.ratetable td.rate { width: 8.2em; min-width: 8.2em; }
+  table.ratetable th.narrow { width: 5em; }
+  table.ratetable td.name { white-space: nowrap; word-break: normal; }
+  td.rate, th.rate { text-align: right; white-space: nowrap; }
+  input.rate-input { width: 6.6em; text-align: right; }
+  input.rate-input:placeholder-shown { opacity: .75; }
+  tr.not-ready td.name { color: var(--dim); }
+  .legend dt { font-weight: 600; margin-top: 8px; }
+  .legend dd { margin: 0; color: var(--dim); }
+</style>
+
+<form method="post" action="{{ url_for('dashboard.drop_rates_save') }}" id="rates-form">
 <input type="hidden" name="csrf" value="{{ csrf_token }}">
 
 <section class="card">
   <h2>Drop rates</h2>
-  <p class="dim">How often a mount or minion in a dungeon's or trial's coffer drops, as a percent. Each one the coffer
-     may hold is rolled on its own, after the coffer's other items (which are picked as before). A duty left blank
-     takes the default. The list is <code>{{ path.name }}</code> in the server's data folder; the world server reads it
-     again whenever it changes, so there's no restart.</p>
-  <p><label>Default <input type="number" name="default" min="0" max="100" step="1" value="{{ default }}"
-     style="width:6em"> %</label>
-     <span class="dim small">(the server's own is {{ server_default }} % when there's no file)</span></p>
-  {% if modified %}<p class="dim small">Last saved {{ modified }}.</p>{% endif %}
-  <p class="dim small mono">{{ path }}</p>
-  <p class="rowactions"><button class="btn accent">Save</button></p>
+  <p class="dim">How often and how much items drop, and how much gil and EXP is given. Every rate is a percent of the
+     server's own: <strong>100</strong> is as it is (retail's, where that's known), <strong>200</strong> twice as often
+     or twice as much, <strong>0</strong> never, up to {{ most }}. A box left blank takes what's above it, shown
+     greyed in the box. The one exception is <em>Mounts &amp; minions</em>, which is the chance itself (0 to 100;
+     {{ mounts_default }} to start with).</p>
+  <p class="dim"><strong>The nearest setting wins.</strong> For an item dropping somewhere, the server looks at that
+     duty's or zone's own row, then its kind of content (or <em>Open world</em>), then its expansion, then
+     <em>Everywhere</em>; in the first of those that says anything for the item it takes the item's category, else
+     its group, else that row's <em>All items</em>.</p>
+  <p class="dim small">Saved as <span class="mono">{{ path }}</span>; the world server reads it again whenever it
+     changes, so there's no restart.{% if modified %} Last saved {{ modified }}.{% endif %}</p>
+  <p class="rowactions"><button class="btn accent" name="action" value="save">Save</button></p>
 </section>
 
-{% if not loaded %}
 <section class="card">
-  <p class="line err">The duty list hasn't been read from the game yet: Content → Duties &amp; zones → build the
-     content index, then come back.</p>
-</section>
-{% else %}
-<section class="card">
-  <p><input type="search" id="duty-filter" placeholder="Filter by name" style="width:100%"></p>
-  <p class="dim small">Scripted: the active build has the duty's script (only those have coffers).</p>
-</section>
-{% for group in groups %}
-<section class="card">
-  <h2>{{ group.name }}</h2>
+  <h2>Gil and EXP</h2>
+  <p class="dim small">The first row is for everything; a source with its own rate uses that instead.</p>
   <div class="table-wrap">
   <table class="grid small">
-    <thead><tr><th>Duty</th><th>Level</th><th>Expansion</th><th>Scripted</th><th>Mounts &amp; minions</th></tr></thead>
+    <thead><tr><th>From</th><th class="rate">Gil</th><th class="rate">EXP</th></tr></thead>
     <tbody>
-    {% for d in group.duties %}
-      <tr class="duty-row" data-name="{{ d.name | lower }}">
-        <td>{{ d.name }}</td>
-        <td>{{ d.level }}</td>
-        <td>{{ expansion_names.get(d.expansion, d.expansion) }}</td>
-        <td>{{ 'yes' if d.scripted else '' }}</td>
-        <td><input type="number" name="duty-{{ d.id }}" min="0" max="100" step="1" style="width:6em"
-                   value="{{ rates.get(d.id, '') }}" placeholder="{{ default }}"> %</td>
-      </tr>
+      <tr><td><strong>Everything</strong></td>
+        <td class="rate"><input type="number" class="rate-input" name="g|all" min="0" max="{{ most }}"
+             value="{{ data.gil.get('all', '') }}" placeholder="100"></td>
+        <td class="rate"><input type="number" class="rate-input" name="e|all" min="0" max="{{ most }}"
+             value="{{ data.exp.get('all', '') }}" placeholder="100"></td></tr>
+      {% set gil_keys = gil_sources | map(attribute=0) | list %}
+      {% for key, label in exp_sources %}
+      <tr><td>{{ label }}</td>
+        <td class="rate">{% if key in gil_keys %}<input type="number" class="rate-input" name="g|{{ key }}" min="0"
+             max="{{ most }}" value="{{ data.gil.get(key, '') }}" placeholder="{{ data.gil.get('all', 100) }}">
+             {% else %}<span class="dim">—</span>{% endif %}</td>
+        <td class="rate"><input type="number" class="rate-input" name="e|{{ key }}" min="0" max="{{ most }}"
+             value="{{ data.exp.get(key, '') }}" placeholder="{{ data.exp.get('all', 100) }}"></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="dim small">Gil from selling to a vendor, the marketboard and retainers isn't a reward and isn't changed.
+     EXP's rested and chain bonuses apply on top, as they do now.</p>
+</section>
+
+{% if not categories %}
+<section class="card">
+  <p class="line err">The items' categories haven't been read from the game yet, so the columns below are only
+     <em>All items</em> and <em>Mounts &amp; minions</em>.</p>
+  <p class="rowactions"><button class="btn" name="action" value="categories" formnovalidate
+     {% if not tool.ok or not tool.has_categories %}disabled{% endif %}>Read the item categories from the game</button>
+     {% if tool.ok and not tool.has_categories %}<span class="dim small">The active build's kawari-questdump can't
+     write them yet: build the fork again (Updates &amp; branches).</span>{% endif %}</p>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Items: everywhere, by expansion and by kind of content</h2>
+  <p class="dim small">Items drop from duties' coffers and from enemies out in the world. The columns are the game's
+     own groups of item categories (what's in each is listed at the bottom).</p>
+  <div class="table-wrap">
+  <table class="grid small ratetable">
+    {{ head(columns, [('Where', ''), ('', 'side')]) }}
+    <tbody>
+    {% for row in broad %}
+      <tr><td class="name">{% if loop.first %}<strong>{{ row.label }}</strong>{% else %}{{ row.label }}{% endif %}</td>
+          <td class="dim small">{{ row.note }}</td>
+          {% for c in row.cells %}{{ cell(c) }}{% endfor %}</tr>
     {% endfor %}
     </tbody>
   </table>
   </div>
 </section>
+
+<section class="card">
+  <h2>Items: by category</h2>
+  <p class="dim small">A rate for one category of item, anywhere from everywhere down to one duty or zone. It wins
+     over that place's group and <em>All items</em> rates. Clear a rule's rate to remove it.</p>
+  {% if not categories %}
+  <p class="dim">Needs the item categories (above).</p>
+  {% endif %}
+  <div class="table-wrap">
+  <table class="grid small" id="rules">
+    <thead><tr><th>Where</th><th>Category</th><th class="rate">Rate</th></tr></thead>
+    <tbody>
+    {% macro rule(scope, category, value, unknown_scope=false, unknown_category=false) -%}
+      <tr class="rule">
+        <td><select name="rule-scope">
+          {% if unknown_scope %}<option value="{{ scope }}" selected>{{ scope }} (not in the content index)</option>{% endif %}
+          {% for label, options in scopes %}
+            {% if label %}<optgroup label="{{ label }}">{% endif %}
+            {% for value_, name in options %}<option value="{{ value_ }}" {{ 'selected' if value_ == scope }}>{{ name }}</option>{% endfor %}
+            {% if label %}</optgroup>{% endif %}
+          {% endfor %}</select></td>
+        <td><select name="rule-category">
+          {% if unknown_category %}<option value="{{ category }}" selected>Category {{ category }}</option>{% endif %}
+          {% for group in groups %}
+            <optgroup label="{{ group_labels.get(group.major, 'Group ' ~ group.major) }}">
+            {% for c in group.categories %}<option value="{{ c.id }}" {{ 'selected' if c.id == category }}>{{ c.name }}</option>{% endfor %}
+            </optgroup>
+          {% endfor %}</select></td>
+        <td class="rate"><input type="number" class="rate-input" name="rule-rate" min="0" max="{{ most }}"
+             value="{{ value }}" placeholder="—"></td>
+      </tr>
+    {%- endmacro %}
+    {% for r in rules %}{{ rule(r.scope, r.category, r.rate, r.unknown_scope, r.unknown_category) }}{% endfor %}
+    {% if categories %}{% for n in range(blank_rules) %}{{ rule('all', -1, '') }}{% endfor %}{% endif %}
+    </tbody>
+  </table>
+  </div>
+  {% if categories %}
+  <p class="rowactions"><button type="button" class="btn" id="add-rule">Add a rule</button></p>
+  {% endif %}
+</section>
+
+{% if not loaded %}
+<section class="card">
+  <p class="line err">The duties and zones haven't been read from the game yet: Content → Duties &amp; zones → build
+     the content index, then come back. The rates above work without it.</p>
+</section>
+{% else %}
+<section class="card">
+  <h2>Items: each duty and zone</h2>
+  <p><input type="search" id="row-filter" placeholder="Filter duties and zones by name" style="width:100%"></p>
+  <p><label><input type="checkbox" id="only-set"> Only those with a rate of their own</label></p>
+  <p class="dim small">Greyed names drop nothing on the server yet (a duty without a script, a zone without
+     enemies): a rate set now applies once they do.</p>
+</section>
+
+{% for x in expansions %}
+<details class="card expansion" {% if x.own %}open{% endif %}>
+  <summary>{{ x.name }} <span class="dim small">· {{ x.duties }} {{ 'duty' if x.duties == 1 else 'duties' }}, {{ x.zones | length }}
+     {{ 'zone' if x.zones | length == 1 else 'zones' }}{% if x.own %},
+     {{ x.own }} with rates of their own{% endif %}</span></summary>
+  {% for group in x.duty_groups %}
+  <h3>{{ group.name }}</h3>
+  <div class="table-wrap">
+  <table class="grid small ratetable">
+    {{ head(columns, [('Duty', ''), ('Level', 'narrow')]) }}
+    <tbody>
+    {% for row in group.rows %}
+      <tr class="place-row{% if not row.ready %} not-ready{% endif %}" data-name="{{ row.name | lower }}"
+          data-set="{{ '1' if row.set else '' }}">
+        <td class="name">{{ row.name }}</td><td>{{ row.level }}</td>
+        {% for c in row.cells %}{{ cell(c) }}{% endfor %}</tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endfor %}
+  {% if x.zones %}
+  <h3>Zones</h3>
+  <div class="table-wrap">
+  <table class="grid small ratetable">
+    {{ head(zone_columns, [('Zone', ''), ('Region', 'side')]) }}
+    <tbody>
+    {% for row in x.zones %}
+      <tr class="place-row{% if not row.ready %} not-ready{% endif %}" data-name="{{ row.name | lower }}"
+          data-set="{{ '1' if row.set else '' }}">
+        <td class="name">{{ row.name }}</td><td class="dim">{{ row.region }}</td>
+        {% for c in row.cells %}{{ cell(c) }}{% endfor %}</tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</details>
 {% endfor %}
-<section class="card"><p class="rowactions"><button class="btn accent">Save</button></p></section>
 {% endif %}
+
+<section class="card"><p class="rowactions"><button class="btn accent" name="action" value="save">Save</button></p></section>
 </form>
+
+{% if groups %}
+<section class="card">
+  <h2>What's in each group</h2>
+  <dl class="legend small">
+  {% for group in groups %}
+    <dt>{{ group_labels.get(group.major, 'Group ' ~ group.major) }}</dt>
+    <dd>{% for c in group.categories %}{{ c.name }}{{ ', ' if not loop.last }}{% endfor %}</dd>
+  {% endfor %}
+  </dl>
+</section>
+{% endif %}
 
 <script>
 (function () {
-  var box = document.getElementById('duty-filter');
-  if (!box) return;
-  box.addEventListener('input', function () {
-    var q = box.value.trim().toLowerCase();
-    document.querySelectorAll('.duty-row').forEach(function (row) {
-      row.style.display = !q || row.dataset.name.indexOf(q) >= 0 ? '' : 'none';
+  var form = document.getElementById('rates-form');
+  // Blank boxes aren't sent: the whole file is on the page, so what isn't sent is cleared.
+  form.addEventListener('submit', function () {
+    form.querySelectorAll('input.rate-input').forEach(function (input) {
+      if (input.value === '' && input.name !== 'rule-rate') input.disabled = true;
     });
   });
+
+  var add = document.getElementById('add-rule');
+  if (add) add.addEventListener('click', function () {
+    var rows = document.querySelectorAll('#rules tr.rule');
+    var last = rows[rows.length - 1];
+    var copy = last.cloneNode(true);
+    copy.querySelector('input').value = '';
+    last.parentNode.appendChild(copy);
+  });
+
+  var box = document.getElementById('row-filter');
+  var only = document.getElementById('only-set');
+  function filter() {
+    var q = box.value.trim().toLowerCase();
+    var set = only.checked;
+    document.querySelectorAll('details.expansion').forEach(function (details) {
+      var shown = 0;
+      details.querySelectorAll('tr.place-row').forEach(function (row) {
+        var has = row.dataset.set === '1' || Array.prototype.some.call(row.querySelectorAll('input'),
+          function (input) { return input.value !== ''; });
+        var show = (!q || row.dataset.name.indexOf(q) >= 0) && (!set || has);
+        row.style.display = show ? '' : 'none';
+        if (show) shown++;
+      });
+      details.style.display = shown ? '' : 'none';
+      if ((q || set) && shown) details.open = true;
+    });
+  }
+  if (box) { box.addEventListener('input', filter); only.addEventListener('change', filter); }
 })();
 </script>
 {% endblock %}
