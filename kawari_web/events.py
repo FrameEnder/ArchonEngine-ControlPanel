@@ -1,5 +1,8 @@
 """Dashboard -> Events: turn the seasonal and special events the fork has built on, off, or on for a time (2.33.0).
 
+The page is a list to pick from (2.33.2: with one event built, three radio buttons and a Save read as one switch for
+everything; Bob, 2026-11-15): a tick beside each event, and beside it whether it runs until unticked or between dates.
+
 An event is a festival to the game: while one is on, the server puts its festival in every ZoneInit, so the event's
 NPCs and decorations are out and its quests and duties can be played. kawari_core.events has the file and the rule;
 the server reads the file again whenever it changes, so there's no restart. What's listed comes from the active
@@ -56,8 +59,10 @@ def _page(data: dict, now: float) -> list[dict]:
 def events():
     data, modified = E.read(event_path())
     now = time.time()
+    rows = _page(data, now)
     return render_template(
-        "dashboard/events.html", section="events", rows=_page(data, now), path=event_path(),
+        "dashboard/events.html", section="events", rows=rows, path=event_path(),
+        picked=sum(row["mode"] != "off" for row in rows),
         build=_active_build() is not None, now=E.clock(int(now)),
         modified=time.strftime("%Y-%m-%d %H:%M", time.localtime(modified)) if modified else "")
 
@@ -67,7 +72,11 @@ def from_form(form, keys: list[str], old: dict) -> tuple[dict, list[str]]:
     data = {"format": 1, "events": {key: setting for key, setting in old["events"].items() if key not in keys}}
     problems = []
     for key in keys:
-        mode = form.get(f"mode|{key}", "off")
+        # A ticked event runs until it's unticked, or between its dates.
+        if not form.get(f"pick|{key}"):
+            mode = "off"
+        else:
+            mode = "scheduled" if form.get(f"when|{key}") == "scheduled" else "on"
         if mode == "on":
             data["events"][key] = {"mode": "on"}
         elif mode == "scheduled":
@@ -97,6 +106,7 @@ def events_save():
         flash(problem, "err")
     now = time.time()
     on = sum(E.is_on(setting, now) for setting in data["events"].values())
-    flash(f"Saved: {on} event{'s' if on != 1 else ''} on now, {len(data['events'])} set. The server reads it at once; "
+    flash(f"Saved: {len(data['events'])} of {len(keys)} event{'s' if len(keys) != 1 else ''} chosen, {on} on now. "
+          "The server reads it at once; "
           "players see an event's NPCs after their next zone change.", "ok")
     return redirect(url_for("dashboard.events"))
