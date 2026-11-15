@@ -1,0 +1,94 @@
+{% extends "dashboard/_layout.html" %}
+{% block title %}Events · {{ branding.site_name }}{% endblock %}
+{% block content %}
+
+<style>
+  .event-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .event-head h3 { margin: 0; }
+  .event-modes { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 12px 0 4px; }
+  .event-times { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: end; margin: 8px 0; }
+  .event-times input { min-width: 14em; }
+  .event-facts { margin: 8px 0 0; }
+</style>
+
+<form method="post" action="{{ url_for('dashboard.events_save') }}">
+<input type="hidden" name="csrf" value="{{ csrf_token }}">
+
+<section class="card">
+  <h2>Events</h2>
+  <p class="dim">The seasonal and special events this server has built. Turn one <strong>on</strong> and it runs until
+     you turn it off; <strong>schedule</strong> it and it starts and ends by itself. While an event is on its NPCs and
+     decorations are out, and its quests and duties can be played.</p>
+  <p class="dim small">Times are UTC (it's {{ now }} UTC now). A schedule without a start is on until its end; without
+     an end, from its start for good. Saved as <span class="mono">{{ path }}</span>; the world server reads it again
+     whenever it changes and watches the schedule itself, so there's no restart. Players already online see an event's
+     NPCs after their next zone change.{% if modified %} Last saved {{ modified }}.{% endif %}</p>
+  <p class="rowactions"><button class="btn accent">Save</button></p>
+</section>
+
+{% if not rows %}
+<section class="card">
+  <p class="line err">{% if build %}The active build has no events yet: build the fork again (events came on
+     2026-11-15).{% else %}No build is active yet. Install one from Setup.{% endif %}</p>
+</section>
+{% endif %}
+
+{% for event in rows %}
+<section class="card">
+  <div class="event-head">
+    <h3>{{ event.name }}</h3>
+    <span class="pill small {{ 'ok' if event.state == 'on' else ('warn' if event.state == 'waiting' else '') }}">{{ event.sentence }}</span>
+  </div>
+  <div class="event-modes">
+    <label><input type="radio" name="mode|{{ event.key }}" value="off" {{ 'checked' if event.mode == 'off' }}> Off</label>
+    <label><input type="radio" name="mode|{{ event.key }}" value="on" {{ 'checked' if event.mode == 'on' }}> On</label>
+    <label><input type="radio" name="mode|{{ event.key }}" value="scheduled" {{ 'checked' if event.mode == 'scheduled' }}> Scheduled</label>
+  </div>
+  <div class="event-times">
+    <label>Starts (UTC)<br><input type="datetime-local" name="start|{{ event.key }}" value="{{ event.start }}"
+       data-event="{{ event.key }}"></label>
+    <label>Ends (UTC)<br><input type="datetime-local" name="end|{{ event.key }}" value="{{ event.end }}"
+       data-event="{{ event.key }}"></label>
+    {% if event.retail[0] %}
+    <button type="button" class="btn small" data-retail="{{ event.key }}" data-start="{{ event.retail_form[0] }}"
+       data-end="{{ event.retail_form[1] }}">Use retail's dates</button>
+    {% endif %}
+  </div>
+  <p class="dim small event-facts">
+    {% if event.retail[0] %}Retail ran it from {{ event.retail[0] }} UTC{% if event.retail[1] %} to
+      {{ event.retail[1] }} UTC{% else %} (no end yet){% endif %}.{% endif %}
+    Festival {{ event.festival }}{% if event.phase %}, phase {{ event.phase }}{% endif %}.
+    {% if event.quest_names %}Quests: {% for id, name in event.quest_names %}{{ name }}{{ ', ' if not loop.last }}{% endfor %}.{% endif %}
+    {% if event.duty_names %}Duties: {% for id, name in event.duty_names %}{{ name }}{{ ', ' if not loop.last }}{% endfor %}.{% endif %}
+  </p>
+</section>
+{% endfor %}
+
+{% if rows %}
+<section class="card">
+  <p class="rowactions"><button class="btn accent">Save</button></p>
+</section>
+{% endif %}
+</form>
+
+<script>
+(function () {
+  // "Use retail's dates" fills the two boxes and picks Scheduled; typing a date picks Scheduled too.
+  function schedule(key) {
+    var radio = document.querySelector('input[type=radio][name="mode|' + key + '"][value=scheduled]');
+    if (radio) { radio.checked = true; }
+  }
+  document.querySelectorAll('button[data-retail]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var key = button.dataset.retail;
+      document.querySelector('input[name="start|' + key + '"]').value = button.dataset.start;
+      document.querySelector('input[name="end|' + key + '"]').value = button.dataset.end;
+      schedule(key);
+    });
+  });
+  document.querySelectorAll('input[type=datetime-local][data-event]').forEach(function (input) {
+    input.addEventListener('change', function () { if (input.value) { schedule(input.dataset.event); } });
+  });
+})();
+</script>
+{% endblock %}
