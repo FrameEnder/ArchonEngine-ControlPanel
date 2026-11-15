@@ -3,7 +3,7 @@
 An event is a festival to the game: while one is on, the server puts its festival in every ZoneInit, so the event's
 NPCs and decorations are out and its quests and duties can be played. kawari_core.events has the file and the rule;
 the server reads the file again whenever it changes, so there's no restart. What's listed comes from the active
-build (resources/data/fork_events.json and festivals.yml) and the names of its quests and duties from the game's
+build (resources/events/fork_events.json) and the names of its quests and duties from the game's
 indexes, so no game text is kept here.
 """
 
@@ -39,7 +39,8 @@ def _page(data: dict, now: float) -> list[dict]:
         kind, sentence = E.state(setting, now)
         rows.append({
             **event,
-            "name": festivals.get(event["festival"]) or event["key"].replace("_", " ").title(),
+            "name": event["label"] or festivals.get(event["festival"])
+            or event["key"].replace("_", " ").title(),
             "quest_names": [(q, (quests.get(q) or {}).get("name") or f"Quest {q}") for q in event["quests"]],
             "duty_names": [(d, duties.get(d) or f"Duty {d}") for d in event["duties"]],
             "mode": setting.get("mode", "off"), "start": E.to_form(setting.get("start")),

@@ -28,8 +28,9 @@
 
 {% if not rows %}
 <section class="card">
-  <p class="line err">{% if build %}The active build has no events yet: build the fork again (events came on
-     2026-11-15).{% else %}No build is active yet. Install one from Setup.{% endif %}</p>
+  <p class="line err">{% if build %}The active build's files have no list of events: build the fork again from
+     <span class="mono">test-pending</span> (the list moved to where a build keeps it on 2026-11-15, after
+     <span class="mono">f9e4b0f</span>).{% else %}No build is active yet. Install one from Setup.{% endif %}</p>
 </section>
 {% endif %}
 

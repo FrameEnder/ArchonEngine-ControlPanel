@@ -9,9 +9,10 @@ comes and goes without a restart:
 ``mode`` is "off" (the same as not being there), "on", or "scheduled" with ``start`` and ``end`` in Unix seconds (UTC);
 without a start it's on until its end, without an end from its start for good.
 
-What can be listed is the build's own: ``resources/data/fork_events.json`` has every event the fork has built (its
-key, festival, phase, quests, duties, and when retail ran it), and ``resources/data/festivals.yml`` the festivals'
-names. No game text is kept here.
+What can be listed is the build's own: ``resources/events/fork_events.json`` has every event the fork has built (its
+key, label, festival, phase, quests, duties, and when retail ran it). It isn't under ``resources/data``, because a
+build's files leave that folder out (2.33.0 looked there and found nothing: Bob, 2026-11-15). No game text is kept
+here.
 """
 
 from __future__ import annotations
@@ -24,7 +25,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 EVENT_FILE = "events.json"
-BUILT_FILE = Path("resources") / "data" / "fork_events.json"
+BUILT_FILE = Path("resources") / "events" / "fork_events.json"
+# A source tree has upstream's festival names; a build's files don't (resources/data is left out of them).
 FESTIVAL_FILE = Path("resources") / "data" / "festivals.yml"
 MODES = ("off", "on", "scheduled")
 # The form's dates: a datetime-local input's value, read as UTC.
@@ -32,7 +34,8 @@ FORM_TIME = "%Y-%m-%dT%H:%M"
 
 
 def built(build_dir: Path | None) -> list[dict]:
-    """The events the active build has built; empty for a build without the file (before 2026-11-15)."""
+    """The events the active build has built; empty for a build without the file (before f9e4b0f's successor of
+    2026-11-15, which moved it out of resources/data)."""
     if build_dir is None:
         return []
     try:
@@ -45,7 +48,8 @@ def built(build_dir: Path | None) -> list[dict]:
             continue
         try:
             out.append({
-                "key": event["key"], "festival": int(event["festival"]), "phase": int(event.get("phase", 0)),
+                "key": event["key"], "label": str(event.get("label", ""))[:80],
+                "festival": int(event["festival"]), "phase": int(event.get("phase", 0)),
                 "quests": [int(q) for q in event.get("quests", [])],
                 "duties": [int(d) for d in event.get("duties", [])],
                 "retail_start": _seconds(event.get("retail_start")), "retail_end": _seconds(event.get("retail_end")),
@@ -57,7 +61,7 @@ def built(build_dir: Path | None) -> list[dict]:
 
 
 def festival_names(build_dir: Path | None) -> dict[int, str]:
-    """festivals.yml's names by ID (a list of ``- Id: N`` / ``Name: ...`` pairs)."""
+    """festivals.yml's names by ID (a list of ``- Id: N`` / ``Name: ...`` pairs), where the build has the file."""
     if build_dir is None:
         return {}
     try:

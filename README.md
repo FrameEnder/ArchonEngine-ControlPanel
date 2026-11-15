@@ -1,7 +1,7 @@
 # ArchonEngine ControlPanel
 
 A browser management/deployment front end for a self-hosted [ArchonEngine](https://github.com/FrameEnder/ArchonEngine)
-FFXIV server, built to run in a Podman container. Version 2.33.0.
+FFXIV server, built to run in a Podman container. Version 2.33.1.
 
 **This is the Windows branch.** It runs the same ControlPanel on Windows, still in Podman: Podman for Windows runs
 containers in a Linux VM (`podman machine`, on WSL2), and the ControlPanel, the game server, the source build and
@@ -141,7 +141,7 @@ the LAN, and the Windows Firewall rule. Since 2.1.3 the app also prints a
 banner before anything can fail:
 
 ```
-ArchonEngine ControlPanel 2.33.0 starting
+ArchonEngine ControlPanel 2.33.1 starting
   uid=1000 gid=1000
   data dir : /data
   data dir owner uid=1000 gid=1000, writable=True
@@ -554,8 +554,10 @@ isn't there). Until then the page has only the *All items* column.
 ## Events
 
 **Dashboard → Events** (2.33.0) turns the seasonal and special events the server
-has built on, off, or on for a time. It needs a fork build with events
-(2026-11-15 on); an older one lists nothing.
+has built on, off, or on for a time. It needs a fork build with the list of
+events where a build keeps it (`resources/events/`, from 2026-11-15; 2.33.0
+looked in `resources/data`, which a build's files leave out, and listed
+nothing); an older build lists nothing and the page says so.
 
 Each event has three choices: **Off**, **On** (until you turn it off), or
 **Scheduled**, with a start and an end. The times are UTC, and the page says
@@ -570,7 +572,7 @@ can be played. The page writes `events.json` in the server's data folder (beside
 schedule itself, so there's no restart. Players already online see an event's
 NPCs after their next zone change.
 
-The events' names come from the build (its festival list); their quests' and
+The events' names come from the build's list; their quests' and
 duties' names come from the game, once the quest index (**Content → Quest lab**)
 and the content index (**Content → Duties & zones**) have been made.
 
