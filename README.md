@@ -1,7 +1,7 @@
 # ArchonEngine ControlPanel
 
 A browser management/deployment front end for a self-hosted [ArchonEngine](https://github.com/FrameEnder/ArchonEngine)
-FFXIV server, built to run in a rootless Podman container. Version 2.31.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.32.0.
 
 How its features work, and how they depend on the ArchonEngine, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -130,7 +130,7 @@ the running image contains the current code. Since 2.1.3 the app also prints a
 banner before anything can fail:
 
 ```
-ArchonEngine ControlPanel 2.31.0 starting
+ArchonEngine ControlPanel 2.32.0 starting
   uid=1000 gid=1000
   data dir : /data
   data dir owner uid=1000 gid=1000, writable=True
@@ -492,18 +492,54 @@ list's text) and `POST /api/glamours` (`{"text": "..."}`, replaces it).
 
 ## Drop rates
 
-**Dashboard → Drop rates** (2.27.0) sets how often a mount or minion in a
-dungeon's or trial's coffer drops, as a percent: one default (90 % to start
-with) and, beside each dungeon and trial, its own if you want one (blank takes
-the default). Each mount or minion a coffer may hold is rolled on its own, after
-the coffer's other items, which are picked as before. The page writes
-`drop-rates.json` in the server's data folder (beside `world.db`); the world
-server reads it again whenever it changes, so there's no restart.
+**Dashboard → Drop rates** (redone in 2.32.0; 2.27.0's page set only mounts and
+minions) sets how often and how much items drop, and how much gil and EXP the
+server gives, as broadly or as finely as you like. It needs a fork build with
+the rates (2026-11-15 on); an older server reads only the mounts and minions.
 
-The duties' names come from the game: build the content index first
-(**Content → Duties & zones**, which runs `kawari-questdump content`). The
-*Scripted* column says which duties the active build has a script for: only
-those have coffers.
+Every rate is a percent of the server's own: **100** is as it is (retail's,
+where that's known), **200** twice, **0** never, up to 1000. A box left blank
+takes what's above it, which the box shows greyed. The one exception is
+*Mounts & minions*, which is the chance itself (0 to 100, 90 to start with):
+each mount or minion a coffer may hold is rolled on its own.
+
+* **Gil and EXP**: one rate for everything, and one for each source that
+  overrides it. Gil: enemies defeated, quest rewards, duty clears and
+  roulettes, FATEs. EXP: those, and gathering, crafting, the Hunting Log and
+  anything else a script gives. Gil from vendors, the marketboard and retainers
+  isn't a reward and isn't changed.
+* **Items, broadly**: a row for everywhere, each expansion, each kind of duty
+  and the open world; a column for all items, each of the game's own groups of
+  item categories, and mounts and minions.
+* **Items, by category**: rules naming a place (anything from everywhere down
+  to one duty or zone), one category of item and a rate.
+* **Items, each duty and zone**: every duty and open-world zone, by expansion
+  and kind, with the same columns; a filter by name, and a box to show only
+  those with a rate of their own. Greyed names drop nothing on the server yet
+  (a duty without a script, a zone without enemies); a rate set now applies
+  once they do.
+
+**The nearest setting wins.** For an item dropping somewhere, the server looks
+at that duty's or zone's own row, then its kind of content (or *Open world*),
+then its expansion, then *Everywhere*; in the first of those that says anything
+for the item it takes the item's category, else its group, else that row's *All
+items*.
+
+What a rate does: an item in a duty's coffer stays as often as its rate says,
+and for each whole 100 % over, one more of what that coffer may hold comes with
+it; what an enemy drops comes less often below 100 %, and in larger amounts
+above it. Gathering, fishing and crafting yields, and the items a quest gives,
+aren't drops and aren't changed.
+
+The page writes `drop-rates.json` (format 2; a 2.27.0 file is read and
+rewritten) in the server's data folder (beside `world.db`); the world server
+reads it again whenever it changes, so there's no restart.
+
+The names come from the game: the duties and zones from the content index
+(**Content → Duties & zones**, which runs `kawari-questdump content`), and the
+item categories and their groups from `item-categories.json`, which
+`kawari-questdump items` writes (the page has a button for it when the file
+isn't there). Until then the page has only the *All items* column.
 
 ## World bots
 
