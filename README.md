@@ -1,7 +1,7 @@
 # ArchonEngine ControlPanel
 
 A browser management/deployment front end for a self-hosted [ArchonEngine](https://github.com/FrameEnder/ArchonEngine)
-FFXIV server, built to run in a rootless Podman container. Version 2.35.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.36.0.
 
 How its features work, and how they depend on the ArchonEngine, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -130,7 +130,7 @@ the running image contains the current code. Since 2.1.3 the app also prints a
 banner before anything can fail:
 
 ```
-ArchonEngine ControlPanel 2.35.0 starting
+ArchonEngine ControlPanel 2.36.0 starting
   uid=1000 gid=1000
   data dir : /data
   data dir owner uid=1000 gid=1000, writable=True
@@ -676,7 +676,7 @@ administrator, for someone (or Claude, through your browser) debugging it live i
 | `/dashboard/harness/status` | is the server up, since when, on which build; capture on or off; who's online |
 | `/dashboard/harness/log?lines=&grep=&since=` | the server's log: how far back to read (default 400 lines, most 20,000), a regular expression, a time of day (`HH:MM`, UTC as the log's); the newest 2,000 matches |
 | `/dashboard/harness/log/problems` | the log's lines that say something went wrong, counted by kind: panics, a server restarted, a stuck world, a stream out of step, dropped connections, errors |
-| `/dashboard/harness/captures`, `/dashboard/harness/captures/<file>?lines=&name=&dir=` | the packet captures, and a capture's last records by packet name (a regular expression) and direction (`in`, `out`, `note`) |
+| `/dashboard/harness/captures`, `/dashboard/harness/captures/<file>?lines=&name=&dir=&from=&to=` | the packet captures, and a capture's last records by packet name (a regular expression) and direction (`in`, `out`, `note`); with `from`/`to` (ms, as the records' `t`; 2.36.0) the first records that match in that time, from anywhere in the file |
 | `/dashboard/harness/characters`, `/dashboard/harness/characters/<content id>` | the characters; one's rows and quest summary, as a bundle's `characters.json` |
 | `/dashboard/harness/config` | the server's config, secrets removed |
 | `/dashboard/harness/bundles` | the bundles kept here |

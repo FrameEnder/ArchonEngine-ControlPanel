@@ -154,6 +154,41 @@ def tail_jsonl(path, lines: int, name=None, direction: str = "") -> list:
     return out
 
 
+_RECORD_TIME = re.compile(rb'"t":\s*(\d+)')
+
+
+def range_jsonl(path, start: int, end: int, lines: int, name=None, direction: str = "") -> list:
+    """The first `lines` records of a capture that match, from time `start` to `end` (ms, as the records' `t`), oldest
+    first; the whole file is read line by line, so any part of it can be had (2.36.0: a duty's entry fell outside the
+    last 8 MB that `tail_jsonl` reads.)"""
+    out = []
+    with open(path, "rb") as handle:
+        for raw in handle:
+            stamp = _RECORD_TIME.search(raw)
+            if stamp is None:
+                continue
+            t = int(stamp.group(1))
+            if t < start:
+                continue
+            if t > end:
+                break
+            try:
+                record = json.loads(raw)
+            except ValueError:
+                continue
+            if direction and record.get("dir") != direction:
+                continue
+            if name is not None and not name.search(str(record.get("name") or record.get("text") or "")):
+                continue
+            for key in ("decoded", "hex"):
+                if isinstance(record.get(key), str):
+                    record[key] = _clip(record[key])
+            out.append(record)
+            if len(out) >= lines:
+                break
+    return out
+
+
 def _server_state() -> dict:
     p = podman()
     if p.mode == "none":
@@ -196,7 +231,9 @@ def harness_index():
             at("dashboard.harness_captures"): "the packet captures being written, newest first",
             at("dashboard.harness_capture", name="NAME.jsonl"): "a capture's last records. ?lines= (default 200) "
                                                                "&name=regex (the packet's name, or a note's text) "
-                                                               "&dir=in|out|note",
+                                                               "&dir=in|out|note; with &from=&to= (ms, as the "
+                                                               "records' t) the first that match in that time, "
+                                                               "from anywhere in the file",
             at("dashboard.harness_characters"): "every character: content_id, name, zone, online",
             at("dashboard.harness_character", content_id=0): "one character's rows and quest summary, as a bundle's "
                                                              "characters.json",
@@ -297,7 +334,16 @@ def harness_capture(name: str):
     direction = request.args.get("dir", "")
     if direction not in ("", "in", "out", "note"):
         return _error("dir is in, out or note")
-    records = tail_jsonl(path, _lines_arg(200, MAX_ANSWER_LINES), pattern, direction)
+    start, end = request.args.get("from", ""), request.args.get("to", "")
+    if start or end:
+        try:
+            start_ms = int(start) if start else 0
+            end_ms = int(end) if end else 2**62
+        except ValueError:
+            return _error("from and to are times in ms, as the records' t")
+        records = range_jsonl(path, start_ms, end_ms, _lines_arg(200, MAX_ANSWER_LINES), pattern, direction)
+    else:
+        records = tail_jsonl(path, _lines_arg(200, MAX_ANSWER_LINES), pattern, direction)
     return jsonify({"ok": True, "name": name, "bytes": path.stat().st_size, "records": records})
 
 
