@@ -1,7 +1,7 @@
 # ArchonEngine ControlPanel
 
 A browser management/deployment front end for a self-hosted [ArchonEngine](https://github.com/FrameEnder/ArchonEngine)
-FFXIV server, built to run in a rootless Podman container. Version 2.34.0.
+FFXIV server, built to run in a rootless Podman container. Version 2.35.0.
 
 How its features work, and how they depend on the ArchonEngine, is documented in the fork's
 `docs/src/fork/kawari-web.md`; that page is updated with every change here.
@@ -130,7 +130,7 @@ the running image contains the current code. Since 2.1.3 the app also prints a
 banner before anything can fail:
 
 ```
-ArchonEngine ControlPanel 2.34.0 starting
+ArchonEngine ControlPanel 2.35.0 starting
   uid=1000 gid=1000
   data dir : /data
   data dir owner uid=1000 gid=1000, writable=True
@@ -682,6 +682,7 @@ administrator, for someone (or Claude, through your browser) debugging it live i
 | `/dashboard/harness/bundles` | the bundles kept here |
 | `/dashboard/harness/sheets` | every Excel sheet of the game install the server reads (2.34.0) |
 | `/dashboard/harness/sheet/<name>?rows=&where=` | a sheet's rows as JSON, each column named as EXDSchema names it (`#index` where it has none), up to 500: `rows` are IDs and ranges (`1043117`, `100-120,5`; none for all), `where` is `COLUMN=VALUE`. Read through the active build's `kawari-questdump sheet` in a throwaway container, as Quest Lab runs it (the build needs that command: build the fork again if it says so). Square Enix's data: for looking at, never for committing (2.34.0) |
+| `/dashboard/harness/layout/<territory>?object=&layer=&kind=` | a territory's layout (its LGBs but bg, vfx and sound) as JSON: each layer's header (active by default or not, its layer set filter, festival) and objects (instance ID, name, kind, position, all physis reads of them), up to 2,000; `object` instance IDs, `layer` part of a layer's name, `kind` part of a kind's (`EventNPC`). Through the active build's `kawari-questdump layout` (2.35.0) |
 
 It only reads: every page is a GET that changes nothing, uses the dashboard's own sign-in (no token to hand out),
 and caps what it returns. Restarting, building and sending a bundle stay on the dashboard's pages.

@@ -208,6 +208,11 @@ def harness_index():
                                                            "ranges (1043117 or 100-120,5; none for all) "
                                                            "&where=COLUMN=VALUE. Square Enix's data: look, don't "
                                                            "commit",
+            at("dashboard.harness_layout", territory=1044): "a territory's layout (its LGBs but bg, vfx, sound): "
+                                                            "each layer's header (active by default, its layer set "
+                                                            "filter) and objects (instance ID, name, kind, position, "
+                                                            "all physis reads), up to 2000. ?object=ID[,ID] "
+                                                            "&layer=part of a name &kind=EventNPC...",
         },
         "changing_things": "nothing here changes the server. Restarting, building, deploying and sending a bundle "
                            "are on the dashboard's pages (Overview, Updates & branches, Diagnostics).",
@@ -339,7 +344,7 @@ class _Collect:
         self.lines.append(line)
 
 
-def _read_game_data(args: list[str], file: str):
+def _read_game_data(args: list[str], file: str, command: str = "sheet"):
     """Runs `kawari-questdump <args>` with the game install and reads the JSON it writes, or (None, why not)."""
     from . import questlab
     status = questlab.tool_status()
@@ -347,9 +352,9 @@ def _read_game_data(args: list[str], file: str):
         return None, status["reason"]
     build = questlab._active_build()
     try:
-        if build is None or b"kawari-questdump sheet" not in (build / questlab.TOOL).read_bytes():
-            return None, (f"The active build's {questlab.TOOL} has no sheet command (it came with the fork's "
-                          f"harness sheets, 2026-11-25): build the fork again.")
+        if build is None or f"kawari-questdump {command}".encode() not in (build / questlab.TOOL).read_bytes():
+            return None, (f"The active build's {questlab.TOOL} has no {command} command (it came with the "
+                          f"fork's harness game data, 2026-11-25): build the fork again.")
     except OSError as exc:
         return None, f"couldn't read the active build's {questlab.TOOL} ({exc})"
     sub = f"harness/{int(time.time() * 1000)}-{threading.get_ident()}"
@@ -395,6 +400,26 @@ def harness_sheet(name: str):
         return _error("where is COLUMN=VALUE")
     args = ["sheet", name] + ([rows.replace(" ", "")] if rows else []) + (["--where", where] if where else [])
     value, problem = _read_game_data(args, "sheet.json")
+    if value is None:
+        return _error(problem, 503)
+    return jsonify({"ok": True, **value})
+
+
+LAYOUT_WHERE = re.compile(r"^[A-Za-z0-9_ ,-]{1,120}$")
+
+
+@dashboard.route("/harness/layout/<int:territory>")
+@auth.admin_required
+def harness_layout(territory: int):
+    args = ["layout", str(territory)]
+    for key in ("object", "layer", "kind"):
+        value = request.args.get(key, "").strip()
+        if not value:
+            continue
+        if not LAYOUT_WHERE.match(value):
+            return _error(f"{key} is letters, digits, _ , and -")
+        args += ["--where", f"{key}={value}"]
+    value, problem = _read_game_data(args, "layout.json", command="layout")
     if value is None:
         return _error(problem, 503)
     return jsonify({"ok": True, **value})
