@@ -12,12 +12,19 @@ Rules it keeps:
 * **Administrators only**, by the same session as the dashboard: no token to hand out or leak, nothing in a URL.
 * **No secrets**: the server's config goes through the same scrubbing as a bundle's.
 * **Bounded**: every answer is capped (lines, bytes), so a page can't be made to read a 40 MB capture into memory.
+
+The game's own data (2.34.0, Bob: "if we extend the API harness ... you could browse the client data in its entirety"):
+`/harness/sheets` and `/harness/sheet/<name>` read any Excel sheet from the game install the server reads, through
+the active build's `kawari-questdump sheet` in a throwaway container (as Quest Lab runs it). Read-only like the rest;
+what comes back is Square Enix's data, for looking at, never for committing.
 """
 
 from __future__ import annotations
 
 import json
 import re
+import shutil
+import threading
 import time
 from collections import Counter
 
@@ -34,6 +41,11 @@ MAX_ANSWER_LINES = 2000
 MAX_LINE_CHARS = 4000
 MAX_PATTERN_CHARS = 200
 CAPTURE_NAME = re.compile(r"^[A-Za-z0-9_.()-]+\.jsonl$")
+SHEET_NAME = re.compile(r"^[A-Za-z0-9_/]{1,80}$")
+SHEET_ROWS = re.compile(r"^[0-9, -]{0,200}$")
+SHEET_WHERE = re.compile(r"^[A-Za-z0-9_#\[\]]{1,80}=[^\n]{0,200}$")
+# How long the list of sheets is kept, and the most sheet reads at once.
+SHEETS_KEPT_FOR = 600
 # How much of a capture's end is read for its last lines.
 CAPTURE_TAIL_BYTES = 8 * 1024 * 1024
 
@@ -190,6 +202,12 @@ def harness_index():
                                                              "characters.json",
             at("dashboard.harness_config"): "the server's config, secrets removed",
             at("dashboard.harness_bundles"): "the diagnostics bundles kept here",
+            at("dashboard.harness_sheets"): "every Excel sheet of the game install the server reads",
+            at("dashboard.harness_sheet", name="ENpcBase"): "a sheet's rows, each column named as EXDSchema names it "
+                                                           "(#index where it has no name), up to 500. ?rows=IDs and "
+                                                           "ranges (1043117 or 100-120,5; none for all) "
+                                                           "&where=COLUMN=VALUE. Square Enix's data: look, don't "
+                                                           "commit",
         },
         "changing_things": "nothing here changes the server. Restarting, building, deploying and sending a bundle "
                            "are on the dashboard's pages (Overview, Updates & branches, Diagnostics).",
@@ -302,3 +320,81 @@ def harness_config():
 def harness_bundles():
     return jsonify({"ok": True, "bundles": [{k: b[k] for k in ("name", "bytes", "when")}
                                             for b in diagnostics.kept_bundles()]})
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  The game's data
+# ════════════════════════════════════════════════════════════════════════════
+_sheets_lock = threading.Lock()
+_sheets_cache: dict[str, tuple[float, dict]] = {}
+
+
+class _Collect:
+    """Stands in for a job: run_once hands it every output line."""
+
+    def __init__(self):
+        self.lines: list[str] = []
+
+    def say(self, line: str) -> None:
+        self.lines.append(line)
+
+
+def _read_game_data(args: list[str], file: str):
+    """Runs `kawari-questdump <args>` with the game install and reads the JSON it writes, or (None, why not)."""
+    from . import questlab
+    status = questlab.tool_status()
+    if not status["ok"]:
+        return None, status["reason"]
+    build = questlab._active_build()
+    try:
+        if build is None or b"kawari-questdump sheet" not in (build / questlab.TOOL).read_bytes():
+            return None, (f"The active build's {questlab.TOOL} has no sheet command (it came with the fork's "
+                          f"harness sheets, 2026-11-25): build the fork again.")
+    except OSError as exc:
+        return None, f"couldn't read the active build's {questlab.TOOL} ({exc})"
+    sub = f"harness/{int(time.time() * 1000)}-{threading.get_ident()}"
+    out = _Collect()
+    result = podman().run_once(questlab._tool_spec(args, out_sub=sub), out, timeout=300)
+    folder = questlab._root() / sub
+    try:
+        if not result.ok:
+            said = " ".join(line.strip() for line in out.lines[-3:])
+            return None, f"{questlab.TOOL} {args[0]} failed ({result.error}): {said}"
+        return json.loads((folder / file).read_text(encoding="utf-8")), ""
+    except (OSError, ValueError) as exc:
+        return None, f"couldn't read what {questlab.TOOL} wrote ({exc})"
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+@dashboard.route("/harness/sheets")
+@auth.admin_required
+def harness_sheets():
+    with _sheets_lock:
+        kept = _sheets_cache.get("sheets")
+        if kept and time.time() - kept[0] < SHEETS_KEPT_FOR:
+            return jsonify({"ok": True, **kept[1]})
+    value, problem = _read_game_data(["sheets"], "sheets.json")
+    if value is None:
+        return _error(problem, 503)
+    with _sheets_lock:
+        _sheets_cache["sheets"] = (time.time(), value)
+    return jsonify({"ok": True, **value})
+
+
+@dashboard.route("/harness/sheet/<path:name>")
+@auth.admin_required
+def harness_sheet(name: str):
+    if not SHEET_NAME.match(name):
+        return _error("not a sheet's name")
+    rows = request.args.get("rows", "").strip()
+    if not SHEET_ROWS.match(rows):
+        return _error("rows are IDs and ranges, e.g. 1043117 or 100-120,5")
+    where = request.args.get("where", "").strip()
+    if where and not SHEET_WHERE.match(where):
+        return _error("where is COLUMN=VALUE")
+    args = ["sheet", name] + ([rows.replace(" ", "")] if rows else []) + (["--where", where] if where else [])
+    value, problem = _read_game_data(args, "sheet.json")
+    if value is None:
+        return _error(problem, 503)
+    return jsonify({"ok": True, **value})
