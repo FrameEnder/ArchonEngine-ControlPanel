@@ -245,6 +245,10 @@ def harness_index():
                                                            "ranges (1043117 or 100-120,5; none for all) "
                                                            "&where=COLUMN=VALUE. Square Enix's data: look, don't "
                                                            "commit",
+            at("dashboard.harness_navmesh"): "the navmeshes and collision files the server made (kawari-navimesh), "
+                                              "?find=part of a path; each with its url",
+            at("dashboard.harness_navmesh_file", path="bg/x.nvm.col"): "one of them, as it is (made from Square "
+                                                                      "Enix's data: look, don't commit)",
             at("dashboard.harness_layout", territory=1044): "a territory's layout (its LGBs but bg, vfx, sound): "
                                                             "each layer's header (active by default, its layer set "
                                                             "filter) and objects (instance ID, name, kind, position, "
@@ -345,6 +349,40 @@ def harness_capture(name: str):
     else:
         records = tail_jsonl(path, _lines_arg(200, MAX_ANSWER_LINES), pattern, direction)
     return jsonify({"ok": True, "name": name, "bytes": path.stat().st_size, "records": records})
+
+
+def _navmesh_dir():
+    """The navmeshes' folder as this process sees it (the server's `navimesh_path`, kept in the data dir.)"""
+    return settings().db_dir / "navimesh"
+
+
+@dashboard.route("/harness/navmesh")
+@auth.admin_required
+def harness_navmesh():
+    folder = _navmesh_dir()
+    find = request.args.get("find", "").lower()
+    files = []
+    if folder.is_dir():
+        for path in sorted(folder.rglob("*")):
+            relative = path.relative_to(folder).as_posix()
+            if path.is_file() and find in relative.lower():
+                files.append({"path": relative, "bytes": path.stat().st_size,
+                              "written": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(path.stat().st_mtime)),
+                              "url": url_for("dashboard.harness_navmesh_file", path=relative)})
+            if len(files) >= 200:
+                break
+    return jsonify({"ok": True, "dir_ok": folder.is_dir(), "files": files})
+
+
+@dashboard.route("/harness/navmesh/<path:path>")
+@auth.admin_required
+def harness_navmesh_file(path: str):
+    from flask import send_file
+    folder = _navmesh_dir().resolve()
+    target = (folder / path).resolve()
+    if folder not in target.parents or not target.is_file():
+        return _error("no such navmesh file", 404)
+    return send_file(target, mimetype="application/octet-stream", as_attachment=True, download_name=target.name)
 
 
 @dashboard.route("/harness/characters")
